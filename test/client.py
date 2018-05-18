@@ -13,12 +13,12 @@ try:
     print 'connecting to %s port %s' % server_address
     sock.connect(server_address)
 
-    message = '{"room": 0,"pos": 5, "rot": [12.3, -90.2, 34], "tester":"py"}'
-    print 'sending "%s"' % message
-    sock.sendall(message)
-
-    data = sock.recv(255)
-    print 'received "%s"' % data
+    while True:
+        message = raw_input('message to send: ')
+        print 'sending "%s"' % message
+        sock.sendall(message)
+        data = sock.recv(255)
+        print 'received "%s"' % data
 
 finally:
     sock.close()

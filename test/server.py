@@ -22,7 +22,16 @@ def main():
             (sock_client, addr_clinet) = tcpsock.accept()
             print 'client socket from ', addr_clinet
             print 'respond to client'
-            sock_client.send('Hi Tinkr!')
+            # sock_client.settimeout(2)
+            while True:
+                try:
+                    data = sock_client.recv(1024)
+                    print 'received from client: ' + data
+                    sock_client.sendall(data)
+                except socket.timeout:
+                    print 'time out'
+                else:
+                    sock_client.close()
     finally:
         print 'server closed'
         tcpsock.close()
