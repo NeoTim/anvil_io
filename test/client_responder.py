@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 import threading
 
 
-class ClientResponder:
+class ClientResponder(threading.Thread):
     def __init__(self):
+        super(ClientResponder, self).__init__()
         self.client_threads = {}    # id : client_thread
         self.client_threads_lock = threading.RLock()
         self.to_recv = []   # message to receive

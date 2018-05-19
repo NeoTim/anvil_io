@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 import socket
 import json
@@ -20,17 +21,16 @@ class Room:
 
 class LobbyServer(threading.Thread):
 
-    latest_id = 0
-
     def __init__(self):
         super(LobbyServer, self).__init__()
+        self.latest_id = 0
         self.client_states = {}     # client id : client state
         self.rooms = {}     # room id : room
 
     def accept_client(self, sock_c):
         # create thread to serve client
         new_client_thread = ClientThread(sock_c, None)
-        while self.client_states[self.latest_id]:
+        while self.latest_id in self.client_states:
             self.latest_id += 1
         cid = self.latest_id
         new_client_state = ClientState(sock_c)

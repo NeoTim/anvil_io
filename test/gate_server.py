@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import socket
 import sys
 import threading
@@ -5,7 +6,7 @@ from lobby_server import LobbyServer
 
 # config
 CONFIG = {
-    'SERVER_IP': '192.168.137.1',
+    'SERVER_IP': '192.168.147.127',
     'GATE_PORT': 10000
 }
 

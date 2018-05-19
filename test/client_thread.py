@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import threading
 import socket
 
@@ -11,14 +12,14 @@ class ClientThread(threading.Thread):
         self.to_send_lock = threading.RLock()
 
     def read_message(self):
-        self.sock_c.settimeout(1)
+        self.sock_c.settimeout(0.1)
         data = None
         try:
             data = self.sock_c.recv(1024)
             if not data:
                 raise socket.error
         except socket.timeout:
-            print 'time out'
+            print 'no data received. waiting'
         return data
 
     def send_message(self, msg):
