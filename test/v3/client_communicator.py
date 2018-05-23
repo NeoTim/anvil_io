@@ -1,7 +1,7 @@
 import socket
 
 
-class COMMUNICATE_STATE:
+class CommunicateState:
 
     OK = 0
     TIME_OUT = 1
@@ -12,13 +12,13 @@ class COMMUNICATE_STATE:
 
 class ClientCommunicator:
     """
-    send and receive message from client
+    send and receive data from client
     """
     def __init__(self, protocol='UDP', sock=None):
         if protocol != 'TCP' and protocol != 'UDP':
             raise ValueError('no suitable protocol for "' + protocol + '"')
         self.protocol = protocol
-        self.communicate_state = COMMUNICATE_STATE()
+        self.communicate_state = CommunicateState()
         self.sock = None
         self.remote_addr = ''
         self.remote_port = 0
@@ -26,7 +26,7 @@ class ClientCommunicator:
             self.sock = sock
         sock.settimeout(5)  # set timeout to 5 sec
 
-    def send_message(self, msg, addr=None, port=None):
+    def send_data(self, msg, addr=None, port=None):
         if self.protocol == 'TCP':
             if addr:
                 raise ValueError('dynamic remote address ' + addr + 'not allowed for TCP!')
@@ -45,19 +45,21 @@ class ClientCommunicator:
             except socket.timeout, e:
                 print 'time out'
 
-    def receive_message(self):
-        msg = None
+    def receive_data(self):
+        data = None
+        addr = ('', 0)
         if self.protocol == 'TCP':
             try:
-                msg = self.sock.recv(1024)
+                data = self.sock.recv(1024)
+                addr = self.sock.getsocketname()
             except socket.timeout:
                 print 'time out'
         if self.protocol == 'UDP':
             try:
-                msg = self.sock.recv(1024)
+                data, addr = self.sock.recvfrom(1024)
             except socket.timeout:
                 print 'time out'
-        return msg
+        return [data, addr]
 
 if __name__ == '__main__':
     pass
