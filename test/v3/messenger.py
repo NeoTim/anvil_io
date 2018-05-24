@@ -33,7 +33,7 @@ class Messenger:
 
         return msg
 
-    def send_message(self, content, target_messenger):
+    def send_message_content(self, content, target_messenger):
         msg = Message(content, self.messenger_name)
         target_messenger.put_message(msg)
 

@@ -1,5 +1,6 @@
 import socket
 import sys
+import threading
 
 # config
 CONFIG = {
@@ -37,5 +38,15 @@ def main():
         tcpsock.close()
 
 
+class TestThread:
+    def __init__(self, aa):
+        self.test_a = aa
+
+    def test_f(self):
+        print 'test_a = ', self.test_a
+
 if __name__ == '__main__':
-    main()
+    t1 = TestThread(4)
+    t2 = TestThread(77)
+    threading.Thread(target=t1.test_f).start()
+    threading.Thread(target=t2.test_f).start()
