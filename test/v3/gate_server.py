@@ -66,9 +66,10 @@ class GateServer(MessageServer):
             self.client_connections[cid] = new_connection
 
             self.client_connections_lock.release()
-            print 'login success'
+            print 'client', cid, 'login success'
         else:
             print 'login failed. connection request denied.'
+        return login_success
 
     def logout_client(self, cid):
         self.client_connections_lock.acquire()
@@ -110,30 +111,48 @@ class GateServer(MessageServer):
             elif self.client_connections[cid].at_room >= 0:
                 print 'client already in room ', self.client_connections[cid].at_room
             else:
-                self.client_connections[cid].at_room = rid
+                # self.client_connections[cid].at_room = room_id
+                print 'pass client', cid, 'to room', room_id
+                self.send_message_content(
+                    {
+                        'add_client': cid,
+                        'data': ''
+                    },
+                    target_room.manager
+                )
+                self.client_connections[cid].at_room = room_id
 
             self.client_connections_lock.release()
 
     def quit_room(self, cid):
-        pass
+        self.client_connections_lock.acquire()
+        print 'client', cid, 'quits room', self.client_connections[cid].at_room
+        self.client_connections[cid].at_room = -1
+        self.client_connections_lock.release()
 
     def handle_message(self, msg):
         """
         routing packages to other servers / managers
-        message content structure (json) from 'room_manager':
+        message content structure from 'room_manager':
             {
-                "send_to_cid": 0,
+                "send_to_cid": cid,
                 "data": "op_code | cid | pos | rot"
+            }
+            {
+                "room_close": rid,
+                "data": [cid]
             }
         :param msg:
         :type msg: Message
         :return:
         """
-        if msg.msg_from == 'room_manager':
+        msg_struct = msg.content
+        if 'send_to_cid' in msg_struct:
+            print 'get message to sent'
+            print msg_struct
             # send package here
-            msg_content_json = json.loads(msg.content)
-            cid = msg_content_json['send_to_cid']
-            send_data = pack('<i', self.client_connections[cid].seq) + msg_content_json['data']
+            cid = msg_struct['send_to_cid']
+            send_data = pack('<i', self.client_connections[cid].seq) + msg_struct['data']
             self.client_connections_lock.acquire()
             if cid not in self.client_connections:
                 print 'client not connected. package not sent'
@@ -150,17 +169,22 @@ class GateServer(MessageServer):
                 finally:
                     sock.close()
             self.client_connections_lock.release()
+        elif 'room_close' in msg_struct:
+            to_quit_clients = msg_struct['data']
+            for cid in to_quit_clients:
+                self.quit_room(cid)
 
     # get package from client
     def get_package(self):
         pkg = None
         try:
-            data, addr = self.gate_communicator.receive_data()
-            if data:
+            data_addr = self.gate_communicator.receive_data()
+            if data_addr:
+                # print data_addr
                 pkg = NetPackage(0, '', 0)
-                pkg.data = data
-                pkg.ip = addr[0]
-                pkg.port = addr[1]
+                pkg.data = data_addr[0]
+                pkg.ip = data_addr[1][0]
+                pkg.port = data_addr[1][1]
         finally:
             return pkg
 
@@ -173,13 +197,16 @@ class GateServer(MessageServer):
         :return:
         """
         # parse package
-        op_code = unpack('c', pkg.data[4:4+1])
-        if op_code == '1':    # connect request
-            cid = unpack('<i', pkg.data[5:5+4])
+        (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', pkg.data)
+        if op_code == '\x02' and cid not in self.client_connections:    # connect request
+            # cid = unpack('<i', pkg.data[5:5+4])
             token = 0
-            self.login_client(cid, token, pkg)
-        if op_code == '2':    # game data
-            (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', pkg.data)
+            login_success = self.login_client(cid, token, pkg)
+            # TODO: assign room should be done by client request
+            if login_success:
+                self.assign_room(cid)
+        elif op_code == '\x02':    # game data
+            # (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', pkg.data)
             # TODO: check seq here
             self.client_connections_lock.acquire()
             if cid in self.client_connections:
@@ -189,9 +216,17 @@ class GateServer(MessageServer):
                     if rid not in self.rooms:
                         print 'room not exists, package discarded'
                     else:
-                        self.send_message_content(pkg, self.rooms[rid].manager)
+                        # self.send_message_content(pkg.data, self.rooms[rid].manager)
+                        self.send_message_content(
+                            {
+                                'update_client': cid,
+                                'data': pkg.data
+                            },
+                            self.rooms[rid].manager
+                        )
+                        print 'notify room to update client'
                 else:
-                    print 'client not in room, package discarded'
+                    print 'client', cid, 'not in room', rid, ', package discarded'
             else:
                 print 'client not logged in, package discarded'
             self.client_connections_lock.release()
@@ -206,16 +241,16 @@ class GateServer(MessageServer):
         try:
             while True:
 
-                # process incoming packages, max 10 a time
-                for p_count in range(10):
+                # process incoming packages, max 1 a time
+                for p_count in range(1):
                     new_pkg = self.get_package()
                     if new_pkg:
                         self.handle_package(new_pkg)
                     else:
                         break
 
-                # process new messages, max 10 a time
-                for m_count in range(10):
+                # process new messages, max 1 a time
+                for m_count in range(1):
                     new_message = self.get_message()
                     if new_message:
                         self.handle_message(new_message)

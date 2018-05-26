@@ -45,19 +45,20 @@ class RoomManager(MessageServer):
         rot = self.clients[cid].rot
         client_data = pack(
             '<ciiiiiii',
-            '\x01',
+            '\x02',
             cid,
             pos[0], pos[1], pos[2],
             rot[0], rot[1], rot[2]
         )
         for target_cid in self.clients:
-            message_content_json = json.dumps(
+            print 'notify gate server to send data'
+            self.send_message_content(
                 {
                     'send_to_cid': target_cid,
                     'data': client_data
-                }
+                },
+                self.gate_server_ref
             )
-            self.send_message_content(message_content_json, self.gate_server_ref)
 
     def handle_message(self, msg):
         """
@@ -65,25 +66,47 @@ class RoomManager(MessageServer):
         | seq | op_code | cid | pos | rot |
            4       1       4    12    12
         :param msg: Message
+        message content structure from 'gate_server':
+            {
+                "add_client": cid,
+                "data": "seq | op_code | cid | pos | rot"
+            }
+            {
+                "remove_client": cid,
+                "data": ""
+            }
+            {
+                "update_client": cid,
+                "data": "seq | op_code | cid | pos | rot"
+            }
         :return:
         """
-        # sync client data
-        (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', msg.content)
-        if self.clients[cid].pos != [pos_x, pos_y, pos_z]:
-            self.clients[cid].pos = [pos_x, pos_y, pos_z]
-            self.clients[cid].need_update = True
-        if self.clients[cid].rot != [pos_x, rot_y, rot_z]:
-            self.clients[cid].rot = [rot_x, rot_y, rot_z]
-            self.clients[cid].need_update = True
-        pass
+        msg_struct = msg.content
+        if 'add_client' in msg_struct:
+            cid = msg_struct['add_client']
+            self.add_client(cid)
+        elif 'update_client' in msg_struct:
+            print 'room update client'
+            # sync client data
+            (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', msg_struct['data'])
+            if cid in self.clients:
+                if self.clients[cid].pos != [pos_x, pos_y, pos_z]:
+                    self.clients[cid].pos = [pos_x, pos_y, pos_z]
+                    self.clients[cid].need_update = True
+                if self.clients[cid].rot != [pos_x, rot_y, rot_z]:
+                    self.clients[cid].rot = [rot_x, rot_y, rot_z]
+                    self.clients[cid].need_update = True
+        elif 'remove_client' in msg_struct:
+            cid = msg_struct['remove_data']
+            self.remove_client(cid)
 
     def start(self):
         print 'RoomManager-' + str(self.rid) + ' starts'
         try:
             while True:
 
-                # process new messages, max 10 a time
-                for i in range(10):
+                # process new messages, max 1 a time
+                for i in range(1):
                     new_message = self.get_message()
                     if not new_message:
                         break
@@ -96,8 +119,16 @@ class RoomManager(MessageServer):
                         if self.clients[cid].need_update:
                             # broadcast to other clients
                             self.broadcast_client_info(cid)
+                            # print 'broadcast client ', cid
                         # clear update flag
                         self.clients[cid].need_update = False
 
         finally:
             print 'RoomManager-' + str(self.rid) + ' ends'
+            # notify gate server
+            self.send_message_content({
+                    'room_close': self.rid,
+                    'data': [self.clients[ck].cid for ck in self.clients]
+                },
+                self.gate_server_ref
+            )

@@ -58,8 +58,10 @@ class ClientCommunicator:
             try:
                 data, addr = self.sock.recvfrom(1024)
             except socket.timeout:
-                print 'time out'
-        return [data, addr]
+                pass
+        if data:
+            return [data, addr]
+        return None
 
 if __name__ == '__main__':
     pass
