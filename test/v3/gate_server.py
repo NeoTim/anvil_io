@@ -6,16 +6,21 @@ import threading
 import socket
 import config
 import json
+import time
 from struct import *
 
 
 class ClientConnection:
+
+    MAX_NO_RESPONSE = 10    # max seconds with no response from client before disconnect it
+
     def __init__(self, sock_c=None, r_ip='', r_port=0):
         self.sock_c = sock_c
         self.seq = 0
         self.remote_ip = r_ip
         self.remote_port = r_port
         self.at_room = -1
+        self.last_package_time = time.time()
 
 
 class RoomInfo:
@@ -75,7 +80,7 @@ class GateServer(MessageServer):
         self.client_connections_lock.acquire()
 
         self.client_connections.pop(cid, None)
-        print 'client logout'
+        print 'client', cid, 'logout'
 
         self.client_connections_lock.release()
 
@@ -126,8 +131,20 @@ class GateServer(MessageServer):
 
     def quit_room(self, cid):
         self.client_connections_lock.acquire()
-        print 'client', cid, 'quits room', self.client_connections[cid].at_room
-        self.client_connections[cid].at_room = -1
+        if cid not in self.client_connections:
+            print 'client', cid, 'not exists'
+        elif self.client_connections[cid].at_room < 0:
+            print 'client', cid, 'was not assigned to any room'
+        else:
+            print 'client', cid, 'requests to quit room', self.client_connections[cid].at_room
+            self.send_message_content(
+                {
+                    'remove_client': cid,
+                    'data': ''
+                },
+                self.rooms[self.client_connections[cid].at_room].manager
+            )
+            self.client_connections[cid].at_room = -1
         self.client_connections_lock.release()
 
     def handle_message(self, msg):
@@ -210,6 +227,7 @@ class GateServer(MessageServer):
             # TODO: check seq here
             self.client_connections_lock.acquire()
             if cid in self.client_connections:
+                self.client_connections[cid].last_package_time = time.time()    # update client last package time
                 rid = self.client_connections[cid].at_room
                 if rid >= 0:
                     # route package to room
@@ -256,6 +274,16 @@ class GateServer(MessageServer):
                         self.handle_message(new_message)
                     else:
                         break
+
+                # loop client each client connection
+                self.client_connections_lock.acquire()
+                for cid in [ccid for ccid in self.client_connections]:
+                    if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
+                        print 'timeout. client', cid, 'connection closed'
+                        self.quit_room(cid)
+                        self.logout_client(cid)
+                self.client_connections_lock.release()
+
         finally:
             self.sock_accepting.close()
             print 'gate server closed'

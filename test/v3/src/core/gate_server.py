@@ -6,10 +6,14 @@ import threading
 import socket
 import config
 import json
+import time
 from struct import *
 
 
 class ClientConnection:
+
+    MAX_NO_RESPONSE = 10    # max seconds with no response from client before disconnect it
+
     def __init__(self, sock_c=None, r_ip='', r_port=0):
         self.sock_c = sock_c
         self.seq = 0
@@ -241,21 +245,24 @@ class GateServer(MessageServer):
         try:
             while True:
 
-                # process incoming packages, max 1 a time
-                for p_count in range(1):
-                    new_pkg = self.get_package()
-                    if new_pkg:
-                        self.handle_package(new_pkg)
-                    else:
-                        break
+                # process 1 incoming packages
+                new_pkg = self.get_package()
+                if new_pkg:
+                    self.handle_package(new_pkg)
 
-                # process new messages, max 1 a time
-                for m_count in range(1):
-                    new_message = self.get_message()
-                    if new_message:
-                        self.handle_message(new_message)
-                    else:
-                        break
+                # process 1 new messages
+                new_message = self.get_message()
+                if new_message:
+                    self.handle_message(new_message)
+
+                # loop each client connection
+                self.client_connections_lock.acquire()
+                for cid in self.client_connections:
+                    if time.time() - self.client_connections > ClientConnection.MAX_NO_RESPONSE:
+                        self.quit_room(cid)
+                        self.logout_client(cid)
+                self.client_connections_lock.release()
+
         finally:
             self.sock_accepting.close()
             print 'gate server closed'

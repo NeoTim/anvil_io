@@ -39,6 +39,7 @@ class RoomManager(MessageServer):
             print 'client not exists'
         else:
             self.clients.pop(cid)
+            print 'client', cid, 'leaves room', self.rid
 
     def broadcast_client_info(self, cid):
         pos = self.clients[cid].pos
@@ -97,7 +98,7 @@ class RoomManager(MessageServer):
                     self.clients[cid].rot = [rot_x, rot_y, rot_z]
                     self.clients[cid].need_update = True
         elif 'remove_client' in msg_struct:
-            cid = msg_struct['remove_data']
+            cid = msg_struct['remove_client']
             self.remove_client(cid)
 
     def start(self):

@@ -1,4 +1,4 @@
-APP_NAME = 'Tinkr'
+APP_NAME = 'TinkrGarage'
 GAME_MODE = {
     'NORMAL': {
         'op_code': (str, 1),
