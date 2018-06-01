@@ -1,5 +1,5 @@
 from message_server import MessageServer
-from client_communicator import ClientCommunicator
+from communicator import NetCommunicator
 from room_manager import RoomManager
 from messenger import Message
 import threading
@@ -56,7 +56,7 @@ class GateServer(MessageServer):
         self.sock_accepting.bind((config.GATE_IP, config.GATE_PORT))
         self.sock_accepting.settimeout(0.1)
         # NOT SURE IF EACH CONNECTION SHOULD HAVE SEPARATE SOCKET
-        self.gate_communicator = ClientCommunicator(sock=self.sock_accepting)   # communicator
+        self.gate_communicator = NetCommunicator(sock=self.sock_accepting)   # communicator
         self.client_connections = {}   # client id : client connection
         self.client_connections_lock = threading.RLock()
         self.rooms = {}     # room id : room info

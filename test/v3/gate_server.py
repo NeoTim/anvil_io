@@ -97,7 +97,7 @@ class GateServer(MessageServer):
         new_room_info.room_thead.start()
         return new_room_info
 
-    def assign_room(self, cid, rid=-1):
+    def assign_room(self, cid, pkg, rid=-1):
         room_id = 0     # always 0 for now
         if rid >= 0:
             room_id = rid
@@ -121,7 +121,7 @@ class GateServer(MessageServer):
                 self.send_message_content(
                     {
                         'add_client': cid,
-                        'data': ''
+                        'data': pkg.data
                     },
                     target_room.manager
                 )
@@ -207,23 +207,33 @@ class GateServer(MessageServer):
 
     def handle_package(self, pkg):
         """
-        | *seq | op_code | cid | pos | rot |
-           4       1        4    12    12
+        cid == client id, vid == vehicle id
+        op_code == '\x01' (join room):
+            | *seq | op_code | cid | vid |
+               4       1        4     4
+        op_code == '\x02' (update):
+            | *seq | op_code | cid | pos | rot |
+               4       1        4    12    12
+        op_code == '\x03' (quit room):
+            | *seq | op_code | cid |
+               4       1        4
         :param: pkg
         :type: pkg: NetPackage
         :return:
         """
         # parse package
-        (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', pkg.data)
-        if op_code == '\x02' and cid not in self.client_connections:    # connect request
+        (seq, op_code, cid) = unpack('<ici', pkg.data[0:0+9])
+        if op_code == '\x01':    # connect request
             # cid = unpack('<i', pkg.data[5:5+4])
+            vid = unpack('<i', pkg.data[9:9+4])
+            print 'vehicle id', vid
             token = 0
             login_success = self.login_client(cid, token, pkg)
             # TODO: assign room should be done by client request
             if login_success:
-                self.assign_room(cid)
+                self.assign_room(cid, pkg)
         elif op_code == '\x02':    # game data
-            # (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', pkg.data)
+            (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', pkg.data)
             # TODO: check seq here
             self.client_connections_lock.acquire()
             if cid in self.client_connections:
@@ -248,6 +258,8 @@ class GateServer(MessageServer):
             else:
                 print 'client not logged in, package discarded'
             self.client_connections_lock.release()
+        elif op_code == '\x03':     # quit request
+            pass
 
     def start_server(self):
         """
@@ -275,7 +287,7 @@ class GateServer(MessageServer):
                     else:
                         break
 
-                # loop client each client connection
+                # loop each client connection
                 self.client_connections_lock.acquire()
                 for cid in [ccid for ccid in self.client_connections]:
                     if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:

@@ -11,6 +11,8 @@ class ClientInfo:
         self.cid = cid
         self.pos = [0, 0, 0]
         self.rot = [0, 0, 0]
+        self.vid = 0
+        self.spawn_slot = 0     # spawn slot of the client in the map
         self.need_update = False    # mask of updating
 
 
@@ -26,13 +28,50 @@ class RoomManager(MessageServer):
         self.clients = {}   # client id : client info
         self.last_update = time.time()  # last update time in milliseconds
 
-    def add_client(self, cid):
+    def add_client(self, cid, pkg_data):
         if len(self.clients) >= self.capacity:
             print 'room full'
         elif cid in self.clients:
             print 'client already in room'
         else:
-            self.clients[cid] = ClientInfo(cid)
+            new_client_info = ClientInfo(cid)
+            vids = unpack('<i', pkg_data[9:9+4])
+            new_client_info.vid = vids[0]
+            new_client_info.spawn_slot = int(len(self.clients))
+
+            print new_client_info.cid
+            print new_client_info.vid
+            print new_client_info.spawn_slot
+
+            # add client to list
+            self.clients[cid] = new_client_info
+
+            # notify other clients to add new client
+            self.broadcast_data(
+                pack(
+                    '<ciii',
+                    '\x01',
+                    cid,
+                    new_client_info.vid,
+                    new_client_info.spawn_slot
+                ),
+                [cid]
+            )
+            # notify new client of existing clients
+            for existing_cid in self.clients:
+                self.send_message_content(
+                    {
+                        'send_to_cid': cid,
+                        'data': pack(
+                            '<ciii',
+                            '\x01',
+                            existing_cid,
+                            self.clients[existing_cid].vid,
+                            self.clients[existing_cid].spawn_slot
+                        )
+                    },
+                    self.gate_server_ref
+                )
 
     def remove_client(self, cid):
         if cid not in self.clients:
@@ -41,22 +80,16 @@ class RoomManager(MessageServer):
             self.clients.pop(cid)
             print 'client', cid, 'leaves room', self.rid
 
-    def broadcast_client_info(self, cid):
-        pos = self.clients[cid].pos
-        rot = self.clients[cid].rot
-        client_data = pack(
-            '<ciiiiiii',
-            '\x02',
-            cid,
-            pos[0], pos[1], pos[2],
-            rot[0], rot[1], rot[2]
-        )
+    def broadcast_data(self, data, exclude_cids=[]):
+
         for target_cid in self.clients:
+            if target_cid in exclude_cids:
+                continue
             print 'notify gate server to send data'
             self.send_message_content(
                 {
                     'send_to_cid': target_cid,
-                    'data': client_data
+                    'data': data
                 },
                 self.gate_server_ref
             )
@@ -70,7 +103,7 @@ class RoomManager(MessageServer):
         message content structure from 'gate_server':
             {
                 "add_client": cid,
-                "data": "seq | op_code | cid | pos | rot"
+                "data": "seq | op_code | cid | vid"
             }
             {
                 "remove_client": cid,
@@ -85,7 +118,7 @@ class RoomManager(MessageServer):
         msg_struct = msg.content
         if 'add_client' in msg_struct:
             cid = msg_struct['add_client']
-            self.add_client(cid)
+            self.add_client(cid, msg_struct['data'])
         elif 'update_client' in msg_struct:
             print 'room update client'
             # sync client data
@@ -119,7 +152,16 @@ class RoomManager(MessageServer):
                     for cid in self.clients:
                         if self.clients[cid].need_update:
                             # broadcast to other clients
-                            self.broadcast_client_info(cid)
+                            pos = self.clients[cid].pos
+                            rot = self.clients[cid].rot
+                            client_data = pack(
+                                '<ciiiiiii',
+                                '\x02',
+                                cid,
+                                pos[0], pos[1], pos[2],
+                                rot[0], rot[1], rot[2]
+                            )
+                            self.broadcast_data(client_data)
                             # print 'broadcast client ', cid
                         # clear update flag
                         self.clients[cid].need_update = False
