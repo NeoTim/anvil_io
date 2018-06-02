@@ -18,7 +18,7 @@ class ClientInfo:
 
 class RoomManager(MessageServer):
 
-    update_rate = 20   # 20 FPS
+    update_rate = 30   # 30 FPS
 
     def __init__(self, rid, gate_server_ref, cap=20):
         MessageServer.__init__(self, 'room_manager')
@@ -85,7 +85,7 @@ class RoomManager(MessageServer):
         for target_cid in self.clients:
             if target_cid in exclude_cids:
                 continue
-            print 'notify gate server to send data'
+            # print 'notify gate server to send data'
             self.send_message_content(
                 {
                     'send_to_cid': target_cid,
@@ -127,7 +127,7 @@ class RoomManager(MessageServer):
                 if self.clients[cid].pos != [pos_x, pos_y, pos_z]:
                     self.clients[cid].pos = [pos_x, pos_y, pos_z]
                     self.clients[cid].need_update = True
-                if self.clients[cid].rot != [pos_x, rot_y, rot_z]:
+                if self.clients[cid].rot != [rot_x, rot_y, rot_z]:
                     self.clients[cid].rot = [rot_x, rot_y, rot_z]
                     self.clients[cid].need_update = True
         elif 'remove_client' in msg_struct:
@@ -161,7 +161,7 @@ class RoomManager(MessageServer):
                                 pos[0], pos[1], pos[2],
                                 rot[0], rot[1], rot[2]
                             )
-                            self.broadcast_data(client_data)
+                            self.broadcast_data(client_data, [cid])
                             # print 'broadcast client ', cid
                         # clear update flag
                         self.clients[cid].need_update = False

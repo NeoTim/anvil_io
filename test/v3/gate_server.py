@@ -12,7 +12,7 @@ from struct import *
 
 class ClientConnection:
 
-    MAX_NO_RESPONSE = 10    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 30    # max seconds with no response from client before disconnect it
 
     def __init__(self, sock_c=None, r_ip='', r_port=0):
         self.sock_c = sock_c
@@ -165,7 +165,7 @@ class GateServer(MessageServer):
         """
         msg_struct = msg.content
         if 'send_to_cid' in msg_struct:
-            print 'get message to sent'
+            # print 'get message to sent'
             print msg_struct
             # send package here
             cid = msg_struct['send_to_cid']
@@ -182,7 +182,7 @@ class GateServer(MessageServer):
                                         )
                     # add sequential number
                     self.client_connections[cid].seq += 1
-                    print d_len, 'bytes data sent'
+                    print d_len, 'bytes data sent to', self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port
                 finally:
                     sock.close()
             self.client_connections_lock.release()
@@ -256,6 +256,8 @@ class GateServer(MessageServer):
                 else:
                     print 'client', cid, 'not in room', rid, ', package discarded'
             else:
+                print cid
+                print self.client_connections
                 print 'client not logged in, package discarded'
             self.client_connections_lock.release()
         elif op_code == '\x03':     # quit request
@@ -272,15 +274,13 @@ class GateServer(MessageServer):
             while True:
 
                 # process incoming packages, max 1 a time
-                for p_count in range(1):
+                for ind in range(1):
                     new_pkg = self.get_package()
                     if new_pkg:
                         self.handle_package(new_pkg)
-                    else:
-                        break
 
                 # process new messages, max 1 a time
-                for m_count in range(1):
+                for ind in range(1):
                     new_message = self.get_message()
                     if new_message:
                         self.handle_message(new_message)

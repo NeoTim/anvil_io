@@ -24,7 +24,7 @@ class ClientCommunicator:
         self.remote_port = 0
         if sock:
             self.sock = sock
-        sock.settimeout(1)  # set timeout to 1 sec
+        sock.settimeout(0.01)  # set timeout to 0.01 sec
 
     def send_data(self, msg, addr=None, port=None):
         if self.protocol == 'TCP':

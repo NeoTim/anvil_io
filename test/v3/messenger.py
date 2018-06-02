@@ -17,7 +17,7 @@ class Messenger:
             pass
 
     def __init__(self, messenger_name):
-        self.message_limit = 200
+        self.message_limit = 100
         self.messages = []  # message inbox
         self.messages_lock = threading.RLock()
         self.messenger_name = messenger_name
@@ -43,6 +43,7 @@ class Messenger:
 
         self.messages_lock.acquire()
         if len(self.messages) >= self.message_limit:
+            print self.messenger_name
             print 'message box full'
             res = Messenger.ResultCode.MESSAGE_FULL
         else:
