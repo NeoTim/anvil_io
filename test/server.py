@@ -46,7 +46,22 @@ class TestThread:
         print 'test_a = ', self.test_a
 
 if __name__ == '__main__':
-    t1 = TestThread(4)
-    t2 = TestThread(77)
-    threading.Thread(target=t1.test_f).start()
-    threading.Thread(target=t2.test_f).start()
+    # t1 = TestThread(4)
+    # t2 = TestThread(77)
+    # threading.Thread(target=t1.test_f).start()
+    # threading.Thread(target=t2.test_f).start()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(('192.168.145.205', 10000))
+    import time
+    addr = None
+    while True:
+        if not addr:
+            try:
+                data, addr = sock.recvfrom(1024)
+                print addr
+            except:
+                pass
+        if addr:
+            time.sleep(1)
+            d = sock.sendto('hihi', addr)
+            print d

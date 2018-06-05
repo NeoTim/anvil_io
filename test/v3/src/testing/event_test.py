@@ -14,11 +14,13 @@ class Event:
         self.event_data = event_data
 
 if __name__ == '__main__':
-    EVENT_DEF = event_def.EVENT
-    for cls in EVENT_DEF.__dict__:
-        print cls
-        if inspect.isclass(EVENT_DEF.__dict__[cls]):
-            evt_class = EVENT_DEF.__dict__[cls]
-            evt = evt_class()
-            getattr(event_def, 'handle_Event1')(evt)
+    # EVENT_DEF = event_def.EVENT
+    # for cls in EVENT_DEF.__dict__:
+    #     print cls
+    #     if inspect.isclass(EVENT_DEF.__dict__[cls]):
+    #         evt_class = EVENT_DEF.__dict__[cls]
+    #         evt = evt_class()
+    #         getattr(event_def, 'handle_Event1')(evt)
+
+    e = Event('test')
 

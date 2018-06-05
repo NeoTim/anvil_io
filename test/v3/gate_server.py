@@ -175,16 +175,17 @@ class GateServer(MessageServer):
                 print 'client not connected. package not sent'
             else:
                 # TODO: should use communicator here
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                try:
-                    d_len = sock.sendto(send_data,
-                                        (self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port)
-                                        )
-                    # add sequential number
-                    self.client_connections[cid].seq += 1
-                    print d_len, 'bytes data sent to', self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port
-                finally:
-                    sock.close()
+                self.gate_communicator.send_data(send_data, self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port)
+                # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                # try:
+                #     d_len = sock.sendto(send_data,
+                #                         (self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port)
+                #                         )
+                #     # add sequential number
+                #     self.client_connections[cid].seq += 1
+                #     print d_len, 'bytes data sent to', self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port
+                # finally:
+                #     sock.close()
             self.client_connections_lock.release()
         elif 'room_close' in msg_struct:
             to_quit_clients = msg_struct['data']
