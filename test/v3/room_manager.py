@@ -23,7 +23,7 @@ class RoomManager(MessageServer):
     def __init__(self, rid, gate_server_ref, cap=20):
         MessageServer.__init__(self, 'room_manager')
         self.rid = rid
-        self.gate_server_ref = gate_server_ref  # must have a ref to gate server
+        self.gate_server_ref = gate_server_ref  # must have a ref to servers server
         self.capacity = cap
         self.clients = {}   # client id : client info
         self.last_update = time.time()  # last update time in milliseconds
@@ -85,7 +85,7 @@ class RoomManager(MessageServer):
         for target_cid in self.clients:
             if target_cid in exclude_cids:
                 continue
-            # print 'notify gate server to send data'
+            # print 'notify servers server to send data'
             self.send_message_content(
                 {
                     'send_to_cid': target_cid,
@@ -120,9 +120,9 @@ class RoomManager(MessageServer):
             cid = msg_struct['add_client']
             self.add_client(cid, msg_struct['data'])
         elif 'update_client' in msg_struct:
-            print 'room update client'
+            # print 'room update client'
             # sync client data
-            (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', msg_struct['data'])
+            (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', msg_struct['data'])
             if cid in self.clients:
                 if self.clients[cid].pos != [pos_x, pos_y, pos_z]:
                     self.clients[cid].pos = [pos_x, pos_y, pos_z]
@@ -168,7 +168,7 @@ class RoomManager(MessageServer):
 
         finally:
             print 'RoomManager-' + str(self.rid) + ' ends'
-            # notify gate server
+            # notify servers server
             self.send_message_content({
                     'room_close': self.rid,
                     'data': [self.clients[ck].cid for ck in self.clients]

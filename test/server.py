@@ -4,7 +4,7 @@ import threading
 
 # config
 CONFIG = {
-    'SERVER_IP': '192.168.137.1',
+    'SERVER_IP': '0.0.0.0',
     'PORT': 10000
 }
 
@@ -51,17 +51,14 @@ if __name__ == '__main__':
     # threading.Thread(target=t1.test_f).start()
     # threading.Thread(target=t2.test_f).start()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('192.168.145.205', 10000))
+    sock.bind(('0.0.0.0', 10000))
     import time
     addr = None
     while True:
-        if not addr:
-            try:
-                data, addr = sock.recvfrom(1024)
-                print addr
-            except:
-                pass
-        if addr:
-            time.sleep(1)
-            d = sock.sendto('hihi', addr)
-            print d
+        try:
+            data, addr = sock.recvfrom(1024)
+            if data:
+                print 'message \'', data, '\'from', addr
+                sock.sendto('Hi Tinkr!', addr)
+        except Exception, e:
+            print e

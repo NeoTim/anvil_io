@@ -15,7 +15,7 @@ client_socks = {}   # id : player socket
 client_socks_lock = threading.RLock()
 
 
-# gate server to accept connection
+# servers server to accept connection
 class GateServer(threading.Thread):
 
     latest_id = 0
@@ -40,7 +40,7 @@ class GateServer(threading.Thread):
                 server_ip = sys.argv[1]
             tcpsock.bind((server_ip, CONFIG['GATE_PORT']))
             tcpsock.listen(1024)
-            print 'car gate server listening at: ', tcpsock.getsockname()
+            print 'car servers server listening at: ', tcpsock.getsockname()
             while True:
                 (sock_client, addr_clinet) = tcpsock.accept()
                 print 'client socket from ', addr_clinet
@@ -48,7 +48,7 @@ class GateServer(threading.Thread):
                 # add new connection
                 self.add_new_client(sock_client)
         finally:
-            print 'car gate server closed'
+            print 'car servers server closed'
             tcpsock.close()
 
 

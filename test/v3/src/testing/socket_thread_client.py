@@ -4,7 +4,7 @@ import logging
 
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(('192.168.145.205', 777))
+sock.bind(('192.168.145.88', 777))
 pack_count = 0
 sock.settimeout(0.01)
 TOTAL_PACKS = 10000

@@ -39,7 +39,7 @@ class NetPackage:
 
 class GateServer(MessageServer):
     """
-    gate server to accept client initial requests
+    servers server to accept client initial requests
     """
     class CommunicatorThread(threading.Thread):
         def __init__(self, gate_server_ref):
@@ -53,7 +53,7 @@ class GateServer(MessageServer):
         MessageServer.__init__(self, m_name)
 
         self.sock_accepting = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # socket to accept packages
-        # bind accepting socket to (gate ip : port)
+        # bind accepting socket to (servers ip : port)
         self.sock_accepting.bind((config.GATE_IP, config.GATE_PORT))
         self.sock_accepting.settimeout(0.1)
         # NOT SURE IF EACH CONNECTION SHOULD HAVE SEPARATE SOCKET
@@ -169,13 +169,14 @@ class GateServer(MessageServer):
             print msg_struct
             # send package here
             cid = msg_struct['send_to_cid']
-            send_data = pack('<i', self.client_connections[cid].seq) + msg_struct['data']
+            send_data = msg_struct['data'][0] + pack('<i', self.client_connections[cid].seq) + msg_struct['data'][1:]
             self.client_connections_lock.acquire()
             if cid not in self.client_connections:
                 print 'client not connected. package not sent'
             else:
                 # TODO: should use communicator here
-                self.gate_communicator.send_data(send_data, self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port)
+                d_len = self.gate_communicator.send_data(send_data, self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port)
+                print d_len, 'bytes sent'
                 # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 # try:
                 #     d_len = sock.sendto(send_data,
@@ -223,7 +224,7 @@ class GateServer(MessageServer):
         :return:
         """
         # parse package
-        (seq, op_code, cid) = unpack('<ici', pkg.data[0:0+9])
+        (op_code, seq, cid) = unpack('<cii', pkg.data[0:0+9])
         if op_code == '\x01':    # connect request
             # cid = unpack('<i', pkg.data[5:5+4])
             vid = unpack('<i', pkg.data[9:9+4])
@@ -234,7 +235,7 @@ class GateServer(MessageServer):
             if login_success:
                 self.assign_room(cid, pkg)
         elif op_code == '\x02':    # game data
-            (seq, op_code, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iciiiiiii', pkg.data)
+            (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', pkg.data)
             # TODO: check seq here
             self.client_connections_lock.acquire()
             if cid in self.client_connections:
@@ -253,7 +254,7 @@ class GateServer(MessageServer):
                             },
                             self.rooms[rid].manager
                         )
-                        print 'notify room to update client'
+                        # print 'notify room to update client'
                 else:
                     print 'client', cid, 'not in room', rid, ', package discarded'
             else:
@@ -270,7 +271,7 @@ class GateServer(MessageServer):
         message => message from other servers (also messenger)
         :return:
         """
-        print 'gate server listening at: ', self.sock_accepting.getsockname()
+        print 'servers server listening at: ', self.sock_accepting.getsockname()
         try:
             while True:
 
@@ -299,7 +300,7 @@ class GateServer(MessageServer):
 
         finally:
             self.sock_accepting.close()
-            print 'gate server closed'
+            print 'servers server closed'
 
 
 if __name__ == '__main__':

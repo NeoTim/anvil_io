@@ -27,11 +27,12 @@ class ClientCommunicator:
         sock.settimeout(0.01)  # set timeout to 0.01 sec
 
     def send_data(self, msg, addr=None, port=None):
+        d_len = 0
         if self.protocol == 'TCP':
             if addr:
                 raise ValueError('dynamic remote address ' + addr + 'not allowed for TCP!')
             try:
-                self.sock.send(msg)
+                d_len = self.sock.send(msg)
             except socket.timeout, e:
                 print 'time out'
         if self.protocol == 'UDP':
@@ -41,9 +42,10 @@ class ClientCommunicator:
                 remote_addr = addr
                 remote_port = port
             try:
-                self.sock.sendto(msg, (remote_addr, remote_port))
+                d_len = self.sock.sendto(msg, (remote_addr, remote_port))
             except socket.timeout, e:
                 print 'time out'
+        return d_len
 
     def receive_data(self):
         data = None

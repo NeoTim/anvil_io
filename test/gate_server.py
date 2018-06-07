@@ -29,7 +29,7 @@ class GateServer(threading.Thread):
                 server_ip = sys.argv[1]
             tcpsock.bind((server_ip, CONFIG['GATE_PORT']))
             tcpsock.listen(1024)
-            print 'car gate server listening at: ', tcpsock.getsockname()
+            print 'car servers server listening at: ', tcpsock.getsockname()
             while True:
                 (sock_client, addr_clinet) = tcpsock.accept()
                 print 'client socket from ', addr_clinet
@@ -37,5 +37,5 @@ class GateServer(threading.Thread):
                 # pass to lobby server
                 self.pass_to_lobby(sock_client)
         finally:
-            print 'car gate server closed'
+            print 'car servers server closed'
             tcpsock.close()

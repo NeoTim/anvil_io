@@ -14,4 +14,10 @@ class EVENT:
             self.name = 'event2'
 
 def handle_Event1(e):
-    print e.name
+    # print e.name
+    print 'a'
+
+
+@handle_Event1
+def myfunc():
+    print 'myf'

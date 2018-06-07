@@ -1,5 +1,5 @@
 from message_server import MessageServer
-from communicator import NetCommunicator
+from net_communicator import NetCommunicator
 from room_manager import RoomManager
 from messenger import Message
 import threading
@@ -38,7 +38,7 @@ class NetPackage:
 
 class GateServer(MessageServer):
     """
-    gate server to accept client initial requests
+    servers server to accept client initial requests
     """
     class CommunicatorThread(threading.Thread):
         def __init__(self, gate_server_ref):
@@ -52,7 +52,7 @@ class GateServer(MessageServer):
         MessageServer.__init__(self, m_name)
 
         self.sock_accepting = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # socket to accept packages
-        # bind accepting socket to (gate ip : port)
+        # bind accepting socket to (servers ip : port)
         self.sock_accepting.bind((config.GATE_IP, config.GATE_PORT))
         self.sock_accepting.settimeout(0.1)
         # NOT SURE IF EACH CONNECTION SHOULD HAVE SEPARATE SOCKET
@@ -241,7 +241,7 @@ class GateServer(MessageServer):
         message => message from other servers (also messenger)
         :return:
         """
-        print 'gate server listening at: ', self.sock_accepting.getsockname()
+        print 'servers server listening at: ', self.sock_accepting.getsockname()
         try:
             while True:
 
@@ -265,7 +265,7 @@ class GateServer(MessageServer):
 
         finally:
             self.sock_accepting.close()
-            print 'gate server closed'
+            print 'servers server closed'
 
 
 if __name__ == '__main__':

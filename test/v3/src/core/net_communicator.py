@@ -15,7 +15,7 @@ class NetCommunicator:
     """
     send and receive data through network
     """
-    def __init__(self, protocol='UDP', sock=None):
+    def __init__(self, protocol='UDP', sock=None, time_out=1):
         if protocol != 'TCP' and protocol != 'UDP':
             raise ValueError('no suitable protocol for "' + protocol + '"')
         self.protocol = protocol
@@ -25,14 +25,15 @@ class NetCommunicator:
         self.remote_port = 0
         if sock:
             self.sock = sock
-        sock.settimeout(1)  # set default timeout to 1 sec
+        sock.settimeout(time_out)  # set default timeout to 1 sec
 
     def send_data(self, msg, addr=None, port=None):
+        d_len = 0
         if self.protocol == 'TCP':
             if addr:
                 raise ValueError('dynamic remote address ' + addr + 'not allowed for TCP!')
             try:
-                self.sock.send(msg)
+                d_len = self.sock.send(msg)
             except socket.timeout, e:
                 print 'time out'
         if self.protocol == 'UDP':
@@ -42,9 +43,10 @@ class NetCommunicator:
                 remote_addr = addr
                 remote_port = port
             try:
-                self.sock.sendto(msg, (remote_addr, remote_port))
+                d_len = self.sock.sendto(msg, (remote_addr, remote_port))
             except socket.timeout, e:
                 print 'time out'
+        return d_len
 
     def receive_data(self):
         data = None

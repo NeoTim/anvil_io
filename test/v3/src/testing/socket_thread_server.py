@@ -6,13 +6,13 @@ import logging
 TOTAL_PACKS = 10000
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(('192.168.145.205', 666))
+sock.bind(('192.168.145.88', 666))
 msg = 'THIS IS S STRING OF TESTING DATA. TESTING TESTING TESTING'
 
 
 def get_send_data():
     def send_data():
-        sock.sendto(msg, ('192.168.145.205', 777))
+        sock.sendto(msg, ('192.168.145.88', 777))
         # print 'sending'
     return send_data
 
@@ -41,11 +41,11 @@ class SendThread(threading.Thread):
 
 
 threads = []
-for i in range(20):
+for i in range(30):
     threads.append(SendThread())
-for j in range(20):
+for j in range(30):
     pass
-    #threads[j].start()
+    threads[j].start()
 
 
 time.sleep(5)
