@@ -4,7 +4,7 @@ from room_server_base import RoomServerBase
 
 class ClientConnection:
     """
-    Client connection model
+    client connection model
     """
     MAX_NO_RESPONSE = 10    # max seconds with no response from client before disconnect it
 

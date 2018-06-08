@@ -8,6 +8,7 @@ import config
 import json
 import time
 from struct import *
+import math
 
 
 class ClientConnection:
@@ -169,7 +170,16 @@ class GateServer(MessageServer):
             print msg_struct
             # send package here
             cid = msg_struct['send_to_cid']
-            send_data = msg_struct['data'][0] + pack('<i', self.client_connections[cid].seq) + msg_struct['data'][1:]
+            # send_data = msg_struct['data'][0] + pack('<i', self.client_connections[cid].seq) + msg_struct['data'][1:]
+            cur_stamp = time.time()
+            int_sec = int(cur_stamp)
+            frac, whole = math.modf(cur_stamp)
+            cur_ms = 0
+            for i in range(6):
+                cur_ms += 10**i * (int_sec % 10)
+                int_sec /= 10
+            cur_ms = cur_ms * 1000 + int(frac * 1000)
+            send_data = msg_struct['data'][0] + pack('<i', cur_ms) + msg_struct['data'][1:]
             self.client_connections_lock.acquire()
             if cid not in self.client_connections:
                 print 'client not connected. package not sent'
@@ -306,3 +316,7 @@ class GateServer(MessageServer):
 if __name__ == '__main__':
     gs = GateServer('gate_server')
     gs.start_server()
+    # for i in range(100):
+    #     time.sleep(1)
+    #     cur_ms = int(time.time() * 1000) % 60000
+    #     print cur_ms

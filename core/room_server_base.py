@@ -31,14 +31,25 @@ class RoomServerBase(CommandServer):
         # self.game_event_dict = {}
         self.client_states = {}     # current client states. client id => app client state
 
-    @on_command('add_client')
-    def add_client(self, cid):
+    # @on_command('add_client')
+    # def add_client(self, cid):
+    #     pass
+    #
+    # @on_command('remove_client')
+    # def remove_client(self, cid):
+    #     pass
+
+    def tick_client_update(self):
+        """
+        update clients to all
+        :return:
+        """
         pass
 
-    @on_command('remove_client')
-    def remove_client(self, cid):
-        pass
-
+    def loop(self):
+        while True:
+            self.tick_command()
+            self.tick_client_update()
 
 example_game_model_config = {
     'MODE': 'NORMAL',
@@ -109,21 +120,24 @@ class RoomServerFactory:
 
 
 if __name__ == '__main__':
-    rs_class = RoomServerFactory.make_room_server_class(0, 0, 0)
-    rs = rs_class(example_game_model_config, example_client_state_config)
-    rs.start_server()
-    rs.run_command('handle_package', 3)
-    # print app_instance.attr1
-    # app_instance2 = appclass()
-    # app_instance2.attr1 = 33
-    # print app_instance.attr1
-    # print app_instance2.attr1
-    # appclass.classattr = 99
-    # app_instance.classattr = 2
-    # print app_instance.classattr
-    # print app_instance.__dict__
-    # print appclass.__dict__
-    # bb = bytearray(3)
-    # print bb
-    # rs = RoomServerBase()
+    # rs_class = RoomServerFactory.make_room_server_class(0, 0, 0)
+    # rs = rs_class(example_game_model_config, example_client_state_config)
     # rs.start_server()
+    # rs.run_command('handle_package', 3)
+
+    import time
+
+    def get7(num):
+        res = 0
+        for i in range(6):
+            res += 10**i * (num % 10)
+            num /= 10
+        return res
+
+    n = time.time()
+    nn = int(n)
+    print nn
+    nn = get7(nn)
+    import math
+    frc, whole = math.modf(n)
+    print nn*1000 + int(frc * 1000)

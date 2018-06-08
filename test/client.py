@@ -6,7 +6,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 try:
     # Connect the socket to the port on the server given by the caller
-    server_ip = '192.168.147.52'
+    server_ip = '10.123.165.53'
     if len(sys.argv) > 1:
         server_ip = sys.argv[1]
     server_address = (server_ip, 10000)
