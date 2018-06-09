@@ -1,5 +1,7 @@
 from command_server import *
 from room_server_base import RoomServerBase
+from network.net_communicator import NetCommunicator
+import socket
 
 
 class ClientConnection:
@@ -27,11 +29,14 @@ class ClientConnection:
 
 class GateServerBase(CommandServer):
 
-    def __init__(self, room_server_class, server_name='gate_server'):
+    def __init__(self, room_server_class, bind_addr=('0,0,0,0', 10000), server_name='gate_server'):
         CommandServer.__init__(self, server_name)
         self.client_connections = {}
         self.room_server_class = room_server_class
         self.room_servers = {}  # room servers ref
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(bind_addr)
+        self.net_communicator = NetCommunicator(sock=sock, time_out=0.01)
 
     def create_room(self, rid=None):
         res_rid = 0
@@ -73,6 +78,15 @@ class GateServerBase(CommandServer):
                 # )
                 self.client_connections[cid].at_room = room_id
 
+    @on_command('send_package')
+    def send_package(self, to_cid, pkg_data):
+        if to_cid in self.client_connections:
+            remote_ip = self.client_connections[to_cid].remote_ip
+            remote_port = self.client_connections[to_cid].remote_port
+            d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
+            print d_len, 'bytes sent'
+        else:
+            print 'client', to_cid, 'not connected. no data sent'
 
 if __name__ == '__main__':
     import room_server_base

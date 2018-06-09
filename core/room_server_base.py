@@ -1,5 +1,20 @@
 from command_server import *
+import time
 import copy
+
+ROOM_SERVER_STRUCTS = {}    # room server structs dict( game_model, client_model )
+
+
+# decorator to register client state
+def app_client_state(cls):
+    ROOM_SERVER_STRUCTS['client_state'] = cls
+    return cls
+
+
+# decorator to register game model
+def app_game_model(cls):
+    ROOM_SERVER_STRUCTS['game_model'] = cls
+    return cls
 
 
 class GameModelBase:
@@ -19,8 +34,7 @@ class GameEventManagerBase:
 
 class RoomServerBase(CommandServer):
 
-    game_model_class = None
-    client_state_class = None
+    CLIENT_UPDATE_RATE = 30     # 30fps
 
     def __init__(self, gate_server_ref, room_id, server_name='room_server'):
         CommandServer.__init__(self, server_name)
@@ -29,22 +43,42 @@ class RoomServerBase(CommandServer):
         # self.game_model_dict = {}    # read only
         # self.client_state_dict = {}  # read only
         # self.game_event_dict = {}
+        self.last_client_update = time.time()
         self.client_states = {}     # current client states. client id => app client state
 
-    # @on_command('add_client')
-    # def add_client(self, cid):
-    #     pass
-    #
-    # @on_command('remove_client')
-    # def remove_client(self, cid):
-    #     pass
+    @on_command('add_client')
+    def add_client(self, cid):
+        if cid not in self.client_states:
+            new_client_state = ROOM_SERVER_STRUCTS['client_state']()
+            self.client_states[cid] = new_client_state
+        else:
+            print 'client', cid, 'already in room', self.room_id
+
+    @on_command('remove_client')
+    def remove_client(self, cid):
+        if cid in self.client_states:
+            self.client_states.pop(cid, None)
+        else:
+            print 'client', cid, 'not in room', self.room_id, '. no client removed from room'
+
+    def pack_client_state(self, cid):
+        raise NotImplementedError
+
+    def unpack_client_state(self, pkg_data):
+        raise NotImplementedError
 
     def tick_client_update(self):
         """
         update clients to all
         :return:
         """
-        pass
+        if time.time() - self.last_client_update > self.CLIENT_UPDATE_RATE:
+            self.last_client_update = time.time()
+            for cid in self.client_states:
+                pkg_data = self.pack_client_state(cid)
+                for target_cid in self.client_states:
+                    if target_cid != cid:
+                        self.gate_server_ref.run_command('send_package', target_cid, pkg_data)
 
     def loop(self):
         while True:

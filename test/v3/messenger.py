@@ -17,7 +17,7 @@ class Messenger:
             pass
 
     def __init__(self, messenger_name):
-        self.message_limit = 100
+        self.message_limit = 500
         self.messages = []  # message inbox
         self.messages_lock = threading.RLock()
         self.messenger_name = messenger_name

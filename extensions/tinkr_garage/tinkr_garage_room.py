@@ -3,7 +3,7 @@ from core.room_server_base import *
 
 class TinkrGarageRoom(RoomServerBase):
 
-    @room_client_state
+    @app_client_state
     class GarageClientState:
         def __init__(self):
             self.pos = [0, 0, 0]
@@ -20,3 +20,11 @@ class TinkrGarageRoom(RoomServerBase):
         :return:
         """
         print 'tinkr garage package logic'
+
+    # def tick_client_update(self):
+    #     pass
+
+if __name__ == '__main__':
+    rs = TinkrGarageRoom(None, 3, 'hh')
+    rs.start_server()
+    rs.run_command('add_client', 4)

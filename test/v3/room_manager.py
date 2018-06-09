@@ -149,6 +149,7 @@ class RoomManager(MessageServer):
                 # send updated clients to gate_server
                 # TODO: better with tick() function
                 if time.time() - self.last_update > (1.0 / self.update_rate):
+                    self.last_update = time.time()
                     for cid in self.clients:
                         if self.clients[cid].need_update:
                             # broadcast to other clients

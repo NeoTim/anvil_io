@@ -167,7 +167,7 @@ class GateServer(MessageServer):
         msg_struct = msg.content
         if 'send_to_cid' in msg_struct:
             # print 'get message to sent'
-            print msg_struct
+            # print msg_struct
             # send package here
             cid = msg_struct['send_to_cid']
             # send_data = msg_struct['data'][0] + pack('<i', self.client_connections[cid].seq) + msg_struct['data'][1:]
@@ -186,7 +186,7 @@ class GateServer(MessageServer):
             else:
                 # TODO: should use communicator here
                 d_len = self.gate_communicator.send_data(send_data, self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port)
-                print d_len, 'bytes sent'
+                print d_len
                 # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 # try:
                 #     d_len = sock.sendto(send_data,
@@ -275,13 +275,24 @@ class GateServer(MessageServer):
         elif op_code == '\x03':     # quit request
             pass
 
+    def keep_sending(self):
+        while True:
+            new_message = self.get_message()
+            if new_message:
+                self.handle_message(new_message)
+
     def start_server(self):
         """
         package => UDP/TCP data from client
         message => message from other servers (also messenger)
         :return:
         """
+
         print 'servers server listening at: ', self.sock_accepting.getsockname()
+
+        sending_thread = threading.Thread(target=self.keep_sending)
+        sending_thread.start()
+
         try:
             while True:
 
@@ -291,13 +302,13 @@ class GateServer(MessageServer):
                     if new_pkg:
                         self.handle_package(new_pkg)
 
-                # process new messages, max 1 a time
-                for ind in range(1):
-                    new_message = self.get_message()
-                    if new_message:
-                        self.handle_message(new_message)
-                    else:
-                        break
+                # # process new messages, max 1 a time
+                # for ind in range(1):
+                #     new_message = self.get_message()
+                #     if new_message:
+                #         self.handle_message(new_message)
+                #     else:
+                #         break
 
                 # loop each client connection
                 self.client_connections_lock.acquire()
