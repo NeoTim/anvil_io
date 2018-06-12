@@ -51,6 +51,7 @@ class RoomServerBase(CommandServer):
         if cid not in self.client_states:
             new_client_state = ROOM_SERVER_STRUCTS['client_state']()
             self.client_states[cid] = new_client_state
+            print 'client', cid, 'entered room', self.room_id
         else:
             print 'client', cid, 'already in room', self.room_id
 
@@ -58,6 +59,7 @@ class RoomServerBase(CommandServer):
     def remove_client(self, cid):
         if cid in self.client_states:
             self.client_states.pop(cid, None)
+            print 'client', cid, 'leaves room', self.room_id
         else:
             print 'client', cid, 'not in room', self.room_id, '. no client removed from room'
 
@@ -84,6 +86,14 @@ class RoomServerBase(CommandServer):
         while True:
             self.tick_command()
             self.tick_client_update()
+
+    def start_server(self):
+        try:
+            self.server_thread = threading.Thread(target=self.loop)
+            print 'room -', self.room_id, 'starts'
+            self.server_thread.start()
+        finally:
+            print 'room -', self.room_id, 'ends'
 
 example_game_model_config = {
     'MODE': 'NORMAL',

@@ -19,7 +19,8 @@ class TinkrGarageRoom(RoomServerBase):
         :param pkg:
         :return:
         """
-        print 'tinkr garage package logic'
+        # game logic here
+        pass
 
     # def tick_client_update(self):
     #     pass
