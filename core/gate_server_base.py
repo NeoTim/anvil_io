@@ -100,10 +100,18 @@ class GateServerBase(CommandServer):
             print 'client', cid, 'not logged in. quit room failed'
 
     @on_command('send_package')
-    def send_package(self, to_cid, pkg_data):
+    def send_package(self, to_cid, pkg_data, pkg_type):
+        """
+        pkg_type 0 = admin, 1 = game, 2 = sys info
+        :param to_cid:
+        :param pkg_data:
+        :param pkg_type:
+        :return:
+        """
         if to_cid in self.client_connections:
             remote_ip = self.client_connections[to_cid].remote_ip
             remote_port = self.client_connections[to_cid].remote_port
+            # TODO: add op_code and seq to package header
             d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
             print d_len, 'bytes sent'
         else:

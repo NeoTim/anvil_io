@@ -12,20 +12,12 @@ class TinkrGarageRoom(RoomServerBase):
     def __init__(self, gate_server_ref, room_id, server_name):
         RoomServerBase.__init__(self, gate_server_ref, room_id, server_name)
 
-    @on_command('handle_package')
-    def handle_package(self, pkg):
-        """
-        server game logic
-        :param pkg:
-        :return:
-        """
-        # game logic here
-        pass
-
-    # def tick_client_update(self):
-    #     pass
+    #def pack_client_state(self, cid):
+    #    print 'my pack'
 
 if __name__ == '__main__':
     rs = TinkrGarageRoom(None, 3, 'hh')
     rs.start_server()
-    rs.run_command('add_client', 4)
+    from core.network.net_package import NetPackage
+    pkg = NetPackage('?', '3.3.3.3', 10000)
+    rs.run_command('handle_package', pkg)

@@ -1,5 +1,6 @@
 from command_server import *
 import time
+from core.network.net_package import NetPackage
 import copy
 
 ROOM_SERVER_STRUCTS = {}    # room server structs dict( game_model, client_model )
@@ -69,9 +70,9 @@ class RoomServerBase(CommandServer):
     def unpack_client_state(self, pkg_data):
         raise NotImplementedError
 
-    def tick_client_update(self):
+    def tick_client_state_sync(self):
         """
-        update clients to all
+        sync client states to all
         :return:
         """
         if time.time() - self.last_client_update > self.CLIENT_UPDATE_RATE:
@@ -80,20 +81,57 @@ class RoomServerBase(CommandServer):
                 pkg_data = self.pack_client_state(cid)
                 for target_cid in self.client_states:
                     if target_cid != cid:
-                        self.gate_server_ref.run_command('send_package', target_cid, pkg_data)
+                        self.gate_server_ref.run_command(
+                            'send_package',
+                            target_cid,
+                            pkg_data,
+                            NetPackage.PackageType.GAME
+                        )
+
+    @on_command('handle_package')
+    def handle_package(self, pkg):
+        """
+        | op_code | seq | other data ...
+             1       4        n
+        op_code structure:
+            00xxxxxx = admin
+            01xxxxxx = game (state / event)
+                010xxxxx = state
+                011xxxxx = event
+            10xxxxxx = sys info
+        :param pkg:
+        :return:
+        """
+        data = pkg.data
+        if not data or len(data) < 5:
+            print 'too small package size. package discarded.'
+        op_code = data[0]
+        if op_code <= '\x3f':   # admin package
+            # TODO: handle admin packages (login, logout, etc.)
+            pass
+        elif op_code <= '\x7f':     # game package
+            # TODO: update client state or handle game event
+            pass
+        elif op_code <= '\xbf':     # sys info package
+            pass
 
     def loop(self):
-        while True:
-            self.tick_command()
-            self.tick_client_update()
+        try:
+            while True:
+                self.tick_command()
+                self.tick_client_state_sync()
+        except Exception, e:
+            print e
+        finally:
+            print 'roomt -', self.room_id, 'ends'
 
     def start_server(self):
         try:
             self.server_thread = threading.Thread(target=self.loop)
             print 'room -', self.room_id, 'starts'
             self.server_thread.start()
-        finally:
-            print 'room -', self.room_id, 'ends'
+        except Exception, e:
+            print e
 
 example_game_model_config = {
     'MODE': 'NORMAL',
@@ -164,24 +202,24 @@ class RoomServerFactory:
 
 
 if __name__ == '__main__':
-    # rs_class = RoomServerFactory.make_room_server_class(0, 0, 0)
-    # rs = rs_class(example_game_model_config, example_client_state_config)
-    # rs.start_server()
-    # rs.run_command('handle_package', 3)
+    rs_class = RoomServerFactory.make_room_server_class(0, 0, 0)
+    rs = rs_class(example_game_model_config, example_client_state_config)
+    rs.start_server()
+    rs.run_command('handle_package', 3)
 
-    import time
-
-    def get7(num):
-        res = 0
-        for i in range(6):
-            res += 10**i * (num % 10)
-            num /= 10
-        return res
-
-    n = time.time()
-    nn = int(n)
-    print nn
-    nn = get7(nn)
-    import math
-    frc, whole = math.modf(n)
-    print nn*1000 + int(frc * 1000)
+    # import time
+    #
+    # def get7(num):
+    #     res = 0
+    #     for i in range(6):
+    #         res += 10**i * (num % 10)
+    #         num /= 10
+    #     return res
+    #
+    # n = time.time()
+    # nn = int(n)
+    # print nn
+    # nn = get7(nn)
+    # import math
+    # frc, whole = math.modf(n)
+    # print nn*1000 + int(frc * 1000)

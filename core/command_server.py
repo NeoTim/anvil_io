@@ -56,16 +56,19 @@ class CommandServer:
         self.command_q.put(cmd)
 
     def tick_command(self):
-        cmd = self.command_q.get()
-        if cmd:
-            if cmd.command_name not in self.COMMAND_FUNCS:
-                print 'command \'' + cmd.command_name + '\' not found'
-            else:
-                try:
-                    # TODO: verify arguments
-                    self.COMMAND_FUNCS[cmd.command_name](*cmd.args, **cmd.kwargs)
-                except Exception, e:
-                    print e
+        try:
+            cmd = self.command_q.get(block=False)
+            if cmd:
+                if cmd.command_name not in self.COMMAND_FUNCS:
+                    print 'command \'' + cmd.command_name + '\' not found'
+                else:
+                    try:
+                        # TODO: verify arguments
+                        self.COMMAND_FUNCS[cmd.command_name](*cmd.args, **cmd.kwargs)
+                    except Exception, e:
+                        print e
+        except Queue.Empty, e:
+            pass
 
     def loop(self):
         while True:

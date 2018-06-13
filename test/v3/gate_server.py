@@ -13,7 +13,7 @@ import math
 
 class ClientConnection:
 
-    MAX_NO_RESPONSE = 30    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 5    # max seconds with no response from client before disconnect it
 
     def __init__(self, sock_c=None, r_ip='', r_port=0):
         self.sock_c = sock_c
