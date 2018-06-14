@@ -1,6 +1,8 @@
 import os
 from os import listdir
 from os.path import isfile,join
+from core.gate_server_base import GateServerBase
+
 
 from core.logger import log
 from config import ENABLED_ZONES
@@ -27,7 +29,15 @@ def launch():
     log("main", "Found game extensions", extensions)    
     log("main", "Enabled game extensions", ENABLED_ZONES)
     
-    
+
+def run(ex_name):
+    """
+    run specific extension given its name
+    :param ex_name:
+    :return:
+    """
+    pass
 
 if __name__ == "__main__":
     launch() # execute only if run as a script
+    # run('tinkr_garage')

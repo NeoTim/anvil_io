@@ -4,6 +4,8 @@ from network.net_communicator import NetCommunicator
 from network.net_package import NetPackage
 import socket
 from struct import *
+import time
+import lib.tkutil as tkutil
 
 
 class ClientConnection:
@@ -17,19 +19,21 @@ class ClientConnection:
         self.seq = 0
         self.remote_ip = r_ip
         self.remote_port = r_port
+        self.last_package_time = time.time()
         self.at_room = -1
 
 
 class GateServerBase(CommandServer):
 
-    def __init__(self, room_server_class, bind_addr=('0,0,0,0', 10000), server_name='gate_server'):
+    def __init__(self, room_server_class, bind_addr=('0.0.0.0', 20000), server_name='gate_server'):
         CommandServer.__init__(self, server_name)
-        self.client_connections = {}
+        self.client_connections = {}    # TODO: this dict might need to be synchronized among threads
         # self.package_client_routing = {}    # ip address => client id
         self.room_server_class = room_server_class
         self.room_servers = {}  # room servers ref
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(bind_addr)
+        self.bind_addr = bind_addr
         self.net_communicator = NetCommunicator(sock=sock, time_out=0.01)
 
     def login_client(self, cid, token, remote_ip, remote_port):
@@ -129,39 +133,70 @@ class GateServerBase(CommandServer):
         :return:
         """
         pkg = None
-        data, addr = self.net_communicator.receive_data()
+        [data, addr] = self.net_communicator.receive_data()
         if data:
             pkg = NetPackage(data, addr[0], addr[1])
+            # update client last response time
+            target_cid = unpack('<i', data[5:5 + 4])
+            self.client_connections[target_cid].last_package_time = time.time()
         if pkg:
             try:
                 op_code = unpack('<c', data[0])
+                # int_op_code = tkutil.get_int_from_byte(op_code)
                 target_cid = unpack('<i', data[5:5+4])
-                if op_code == '\x01':   # login request
-                    token = self.parse_token(data)
-                    self.login_client(target_cid, token, addr[0], addr[1])
-                elif op_code == '\x02':     # game update
+                if op_code <= '\x3f':  # admin package
+                    if op_code == '\x01':   # login
+                        token = self.parse_token(data)
+                        self.login_client(target_cid, token, addr[0], addr[1])
+                    elif op_code == '\x02':  # logout
+                        self.logout_client(target_cid)
+                elif op_code <= '\x7f':  # game package
                     at_room = self.client_connections[target_cid]
                     if at_room >= 0:
                         self.room_servers[at_room].run_command('handle_package', pkg)
-                elif op_code == '\x03':  # logout request
-                    self.logout_client(target_cid)
+                elif op_code <= '\xbf':  # sys info package
+                    pass
             except KeyError, e:
                 print e
                 print 'unknown package'
 
     def tick_connection_check(self):
-        pass
+        # detect if the client connection is timed out
+        for cid in [ccid for ccid in self.client_connections]:
+            if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
+                print 'timeout. client', cid, 'connection closed'
+                self.quit_room(cid)
+                self.logout_client(cid)
 
     def loop(self):
-        while True:
-            self.tick_command()
-            self.tick_package()
-            self.tick_connection_check()
+        try:
+            while True:
+                self.tick_command()
+                self.tick_package()
+                self.tick_connection_check()
+        finally:
+            print 'gate server closed'
+
+    def start_server(self):
+        try:
+            self.server_thread = threading.Thread(target=self.loop)
+            print 'gate server listening at', self.bind_addr
+            self.server_thread.start()
+        except Exception, e:
+            print e
 
 
 if __name__ == '__main__':
     import room_server_base
     # CONFIG.get_room_server_class()
-    rs_class = room_server_base.RoomServerFactory.make_room_server_class(0, 0, 0)
+
+    from extensions.tinkr_garage.tinkr_garage_room import TinkrGarageRoom
+
+    class TinkrGateServer(GateServerBase):
+        def __init__(self, room_server_class, bind_addr, server_name):
+            GateServerBase.__init__(self, room_server_class, bind_addr, server_name)
+
+    # rs_class = room_server_base.RoomServerFactory.make_room_server_class(0, 0, 0)
+    rs_class = TinkrGarageRoom
     gs = GateServerBase(rs_class)
     gs.start_server()

@@ -3,7 +3,13 @@ import time
 from core.network.net_package import NetPackage
 import copy
 
-ROOM_SERVER_STRUCTS = {}    # room server structs dict( game_model, client_model )
+
+# room server structs dict( game_model, client_state )
+ROOM_SERVER_STRUCTS = {
+    'client_state': None,
+    'game_model': None,
+    'game_event_funcs': {}  # event_name => handler function
+}
 
 
 # decorator to register client state
@@ -16,6 +22,18 @@ def app_client_state(cls):
 def app_game_model(cls):
     ROOM_SERVER_STRUCTS['game_model'] = cls
     return cls
+
+
+# decorator to register game event
+def on_game_event(evt_name):
+    def reg_decorator(func):
+        # TODO: verify the server_class
+        ROOM_SERVER_STRUCTS['game_event_funcs'][evt_name] = func
+        @wraps(func)
+        def wrapped_func(*args, **kwargs):
+            return func(*args, **kwargs)
+        return wrapped_func
+    return reg_decorator
 
 
 class GameModelBase:
@@ -41,10 +59,7 @@ class RoomServerBase(CommandServer):
         CommandServer.__init__(self, server_name)
         self.room_id = room_id
         self.gate_server_ref = gate_server_ref
-        # self.game_model_dict = {}    # read only
-        # self.client_state_dict = {}  # read only
-        # self.game_event_dict = {}
-        self.last_client_update = time.time()
+        self.last_client_sync = time.time()
         self.client_states = {}     # current client states. client id => app client state
 
     @on_command('add_client')
@@ -75,8 +90,8 @@ class RoomServerBase(CommandServer):
         sync client states to all
         :return:
         """
-        if time.time() - self.last_client_update > self.CLIENT_UPDATE_RATE:
-            self.last_client_update = time.time()
+        if time.time() - self.last_client_sync > self.CLIENT_UPDATE_RATE:
+            self.last_client_sync = time.time()
             for cid in self.client_states:
                 pkg_data = self.pack_client_state(cid)
                 for target_cid in self.client_states:
@@ -87,6 +102,12 @@ class RoomServerBase(CommandServer):
                             pkg_data,
                             NetPackage.PackageType.GAME
                         )
+
+    def handle_client_state_package_data(self, pkg_data):
+        pass
+
+    def handle_game_event_package_data(self, pkg_data):
+        pass
 
     @on_command('handle_package')
     def handle_package(self, pkg):
@@ -107,11 +128,13 @@ class RoomServerBase(CommandServer):
             print 'too small package size. package discarded.'
         op_code = data[0]
         if op_code <= '\x3f':   # admin package
-            # TODO: handle admin packages (login, logout, etc.)
             pass
         elif op_code <= '\x7f':     # game package
             # TODO: update client state or handle game event
-            pass
+            if op_code <= '\x4f':   # state update
+                self.handle_client_state_package_data(data)
+            else:   # game event
+                self.handle_game_event_package_data(data)
         elif op_code <= '\xbf':     # sys info package
             pass
 
@@ -123,7 +146,7 @@ class RoomServerBase(CommandServer):
         except Exception, e:
             print e
         finally:
-            print 'roomt -', self.room_id, 'ends'
+            print 'room -', self.room_id, 'ends'
 
     def start_server(self):
         try:

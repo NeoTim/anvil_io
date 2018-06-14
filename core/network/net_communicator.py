@@ -64,7 +64,7 @@ class NetCommunicator:
                 pass
         if data:
             return [data, addr]
-        return None
+        return [None, None]
 
 if __name__ == '__main__':
     pass
