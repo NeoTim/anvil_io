@@ -1,46 +1,28 @@
-from functools import wraps
-
-SERVER_COMMAND_FUNCS = {}   # command register
-
-
-def on_command(command_name):
-    def reg_decorator(func):
-        # TODO: verify the server_class
-        SERVER_COMMAND_FUNCS[command_name] = func
-        @wraps(func)
-        def wrapped_func(*args, **kwargs):
-            return func(*args, **kwargs)
-        return wrapped_func
-    return reg_decorator
+import inspect
+# REG = []
 
 
-MY_STATE = {}
+# def reg_func(func):
+#     REG.append(func)
+#     print REG
+#     return func
 
 
-def my_state(cls):
-    MY_STATE['my_state'] = cls
-    return cls
+class ClassBase:
 
+    REG = {}
 
-class BaseClass:
-    COMMAND_FUNCS = SERVER_COMMAND_FUNCS
+    @classmethod
+    def reg_func(cls, func_name):
+        def dec(func):
+            cls.REG[func_name] = func
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+        return dec
+
     def __init__(self):
         pass
 
-    def new_state(self):
-        return MY_STATE['my_state']()
-
-
-class MyClass(BaseClass):
-    def __init__(self):
-        BaseClass.__init__(self)
-
-    @my_state
-    class MyState:
-        def __init__(self):
-            self.pos = [0, 0, 0]
-
 if __name__ == '__main__':
-    mc = MyClass()
-    ms = mc.new_state()
-    print ms.pos
+    pass
