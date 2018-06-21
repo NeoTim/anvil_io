@@ -100,6 +100,10 @@ class GameEventManager:
         self.room_server_ref = room_server_ref
         self.game_event_q = Queue.Queue()
 
+    def broadcast_event(self, evt, exclude=list()):
+        """ broadcast server event to clients """
+        pass
+
     def handle_event(self, evt):
         # TODO: handle game event
         if isinstance(evt, ClientGameEvent):
@@ -199,11 +203,13 @@ class RoomServerBase(CommandServer):
         | op_code | seq | other data ...
              1       4        n
         op_code structure:
-            00xxxxxx = admin
-            01xxxxxx = game (state / event)
-                010xxxxx = state
-                011xxxxx = event
-            10xxxxxx = sys info
+            0000xxxx = admin
+                0000 0001 = login
+                0000 0010 = logout
+            0001xxxx = game (state / event)
+                0001 0001 = state
+                0001 0010 = event
+            0010xxxx = sys info
         :param pkg:
         :return:
         """
@@ -211,15 +217,15 @@ class RoomServerBase(CommandServer):
         if not data or len(data) < 5:
             print 'too small package size. package discarded.'
         op_code = data[0]
-        if op_code <= '\x3f':   # admin package
+        if op_code <= '\x0f':   # admin package
             pass
-        elif op_code <= '\x7f':     # game package
+        elif op_code <= '\x1f':     # game package
             # TODO: update client state or handle game event
-            if op_code <= '\x4f':   # state update
+            if op_code == '\x11':   # state update
                 self.handle_client_state_package_data(data)
-            else:   # game event
+            elif op_code == '\x12':   # game event
                 self.handle_game_event_package_data(data)
-        elif op_code <= '\xbf':     # sys info package
+        elif op_code <= '\x2f':     # sys info package
             pass
 
     def tick_game_event(self):

@@ -1,6 +1,6 @@
 from message_server import MessageServer
 from client_communicator import ClientCommunicator
-from room_manager import RoomManager
+from room_manager_new import RoomManager
 from messenger import Message
 import threading
 import socket
@@ -234,44 +234,65 @@ class GateServer(MessageServer):
         :return:
         """
         # parse package
-        (op_code, seq, cid) = unpack('<cii', pkg.data[0:0+9])
-        if op_code == '\x01':    # connect request
-            # cid = unpack('<i', pkg.data[5:5+4])
-            vid = unpack('<i', pkg.data[9:9+4])
-            print 'vehicle id', vid
-            token = 0
-            login_success = self.login_client(cid, token, pkg)
-            # TODO: assign room should be done by client request
-            if login_success:
-                self.assign_room(cid, pkg)
-        elif op_code == '\x02':    # game data
-            (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', pkg.data)
-            # TODO: check seq here
-            self.client_connections_lock.acquire()
-            if cid in self.client_connections:
-                self.client_connections[cid].last_package_time = time.time()    # update client last package time
-                rid = self.client_connections[cid].at_room
-                if rid >= 0:
-                    # route package to room
-                    if rid not in self.rooms:
-                        print 'room not exists, package discarded'
+        (op_code, seq) = unpack('<ci', pkg.data[0:0+5])
+        if op_code <= '\x0f':    # connect request
+            # if op_code == '\x01':
+            #     # cid = unpack('<i', pkg.data[5:5+4])
+            #     vid = unpack('<i', pkg.data[9:9+4])
+            #     print 'vehicle id', vid
+            #     token = 0
+            #     login_success = self.login_client(cid, token, pkg)
+            #     # TODO: assign room should be done by client request
+            #     if login_success:
+            #         self.assign_room(cid, pkg)
+            pass
+        elif op_code <= '\x1f':    # game data
+            if op_code == '\x11':      # client state
+                (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', pkg.data)
+                # TODO: check seq here
+                self.client_connections_lock.acquire()
+                if cid in self.client_connections:
+                    self.client_connections[cid].last_package_time = time.time()    # update client last package time
+                    rid = self.client_connections[cid].at_room
+                    if rid >= 0:
+                        # route package to room
+                        if rid not in self.rooms:
+                            print 'room not exists, package discarded'
+                        else:
+                            # self.send_message_content(pkg.data, self.rooms[rid].manager)
+                            self.send_message_content(
+                                {
+                                    'update_client': cid,
+                                    'data': pkg.data
+                                },
+                                self.rooms[rid].manager
+                            )
+                            # print 'notify room to update client'
                     else:
-                        # self.send_message_content(pkg.data, self.rooms[rid].manager)
-                        self.send_message_content(
-                            {
-                                'update_client': cid,
-                                'data': pkg.data
-                            },
-                            self.rooms[rid].manager
-                        )
-                        # print 'notify room to update client'
+                        print 'client', cid, 'not in room', rid, ', package discarded'
                 else:
-                    print 'client', cid, 'not in room', rid, ', package discarded'
-            else:
-                print cid
-                print self.client_connections
-                print 'client not logged in, package discarded'
-            self.client_connections_lock.release()
+                    print cid
+                    print self.client_connections
+                    print 'client not logged in, package discarded'
+                self.client_connections_lock.release()
+            elif op_code == '\x12': # game event
+                print 'game event'
+                (event_id) = unpack('<c', pkg.data[5])
+                (cid) = unpack('<i', pkg.data[6:6+4])
+                event_id = event_id[0]
+                cid = cid[0]
+                print 'event id', event_id
+                print 'cid ', cid
+                if event_id == '\x00':   # login event
+                    print 'login event'
+                    # cid = unpack('<i', pkg.data[5:5+4])
+                    vid = unpack('<i', pkg.data[10:10 + 4])
+                    print 'vehicle id', vid
+                    token = 0
+                    login_success = self.login_client(cid, token, pkg)
+                    # TODO: assign room should be done by client request
+                    if login_success:
+                        self.assign_room(cid, pkg)
         elif op_code == '\x03':     # quit request
             pass
 

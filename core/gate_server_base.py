@@ -144,17 +144,17 @@ class GateServerBase(CommandServer):
                 op_code = unpack('<c', data[0])
                 # int_op_code = tkutil.get_int_from_byte(op_code)
                 target_cid = unpack('<i', data[5:5+4])
-                if op_code <= '\x3f':  # admin package
+                if op_code <= '\x0f':  # admin package
                     if op_code == '\x01':   # login
                         token = self.parse_token(data)
                         self.login_client(target_cid, token, addr[0], addr[1])
                     elif op_code == '\x02':  # logout
                         self.logout_client(target_cid)
-                elif op_code <= '\x7f':  # game package
+                elif op_code <= '\x1f':  # game package
                     at_room = self.client_connections[target_cid]
                     if at_room >= 0:
                         self.room_servers[at_room].run_command('handle_package', pkg)
-                elif op_code <= '\xbf':  # sys info package
+                elif op_code <= '\x2f':  # sys info package
                     pass
             except KeyError, e:
                 print e
@@ -200,6 +200,3 @@ if __name__ == '__main__':
     rs_class = TinkrGarageRoom
     gs = GateServerBase(rs_class)
     gs.start_server()
-    print gs.COMMAND_FUNCS
-    rm = gs.create_room(4)
-    print rm.COMMAND_FUNCS
