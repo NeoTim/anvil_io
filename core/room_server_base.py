@@ -3,6 +3,7 @@ import time
 from core.network.net_package import NetPackage
 import copy
 import inspect
+from struct import *
 
 
 # room server structs dict( game_model, client_state )
@@ -123,7 +124,7 @@ class GameEventManager:
 
 class RoomServerBase(CommandServer):
 
-    CLIENT_UPDATE_RATE = 30     # 30fps
+    CLIENT_UPDATE_RATE = 20     # 20fps
 
     class ClientState:
         """ class of client state """
@@ -135,27 +136,34 @@ class RoomServerBase(CommandServer):
         def __init__(self):
             pass
 
+    class ClientInfo:
+        """ info to record each client communication condition"""
+        def __init__(self, client_state):
+            self.state = client_state   # instance of ClientState
+            self.state_latest_stamp = 0    # timestamp of latest state package
+
     def __init__(self, gate_server_ref, room_id, server_name='room_server'):
         CommandServer.__init__(self, server_name)
         self.room_id = room_id
         self.gate_server_ref = gate_server_ref
         self.last_client_sync = time.time()
-        self.client_states = {}     # current client states. client id => app client state
+        self.client_infos = {}     # current client states. client id => client info
         self.game_event_manager = GameEventManager(self)
 
     @on_command('add_client')
     def add_client(self, cid):
-        if cid not in self.client_states:
+        if cid not in self.client_infos:
             new_client_state = self.ClientState()   # ROOM_SERVER_STRUCTS['client_state']()
-            self.client_states[cid] = new_client_state
+            new_client_info = self.ClientInfo(new_client_state)
+            self.client_infos[cid] = new_client_info
             print 'client', cid, 'entered room', self.room_id
         else:
             print 'client', cid, 'already in room', self.room_id
 
     @on_command('remove_client')
     def remove_client(self, cid):
-        if cid in self.client_states:
-            self.client_states.pop(cid, None)
+        if cid in self.client_infos:
+            self.client_infos.pop(cid, None)
             print 'client', cid, 'leaves room', self.room_id
         else:
             print 'client', cid, 'not in room', self.room_id, '. no client removed from room'
@@ -171,31 +179,48 @@ class RoomServerBase(CommandServer):
         sync client states to all
         :return:
         """
+        # try:
+        #     if time.time() - self.last_client_sync > self.CLIENT_UPDATE_RATE:
+        #         self.last_client_sync = time.time()
+        #         for cid in self.client_states:
+        #             pkg_data = self.pack_client_state(cid)
+        #             for target_cid in self.client_states:
+        #                 if target_cid != cid:
+        #                     self.gate_server_ref.run_command(
+        #                         'send_package',
+        #                         target_cid,
+        #                         pkg_data,
+        #                         NetPackage.PackageType.GAME
+        #                     )
+        # except Exception, e:
+        #     print e
         try:
             if time.time() - self.last_client_sync > self.CLIENT_UPDATE_RATE:
                 self.last_client_sync = time.time()
-                for cid in self.client_states:
-                    pkg_data = self.pack_client_state(cid)
-                    for target_cid in self.client_states:
-                        if target_cid != cid:
-                            self.gate_server_ref.run_command(
-                                'send_package',
-                                target_cid,
-                                pkg_data,
-                                NetPackage.PackageType.GAME
-                            )
+                client_state_count = 0
+                data_to_send = ''
+                for cid in self.client_infos:
+                    data_to_send += self.pack_client_state(cid)
+                    client_state_count += 1
+                data_to_send = pack('<i', client_state_count) + data_to_send
+                if len(data_to_send):
+                    # broadcast client states
+                    for target_cid in self.client_infos:
+                        self.gate_server_ref.run_command(
+                            'send_package',
+                            target_cid,
+                            data_to_send,
+                            '\x12'
+                        )
         except Exception, e:
             print e
 
-    def handle_client_state_package_data(self, pkg_data):
-        pass
+    def handle_client_state_package(self, pkg):
+        seq = unpack('<i', pkg.data[1:1+4])[0]
 
-    def unpack_client_game_event(self, pkg_data):
-        pass
 
-    def handle_game_event_package_data(self, pkg_data):
-        c_game_event = self.unpack_client_game_event(pkg_data)
-        # TODO: push client game event to event manager's event queue
+    def handle_game_event_package(self, pkg):
+        pass
 
     @on_command('handle_package')
     def handle_package(self, pkg):
@@ -208,7 +233,12 @@ class RoomServerBase(CommandServer):
                 0000 0010 = logout
             0001xxxx = game (state / event)
                 0001 0001 = state
+                    op_code | seq | ...
+                       1       4
                 0001 0010 = event
+                    op_code | seq | event_id | ...
+                       1       4        1
+                    event_id: 0 == login, 1 == logout, 2 == game start
             0010xxxx = sys info
         :param pkg:
         :return:
@@ -222,9 +252,9 @@ class RoomServerBase(CommandServer):
         elif op_code <= '\x1f':     # game package
             # TODO: update client state or handle game event
             if op_code == '\x11':   # state update
-                self.handle_client_state_package_data(data)
+                self.handle_client_state_package(pkg)
             elif op_code == '\x12':   # game event
-                self.handle_game_event_package_data(data)
+                self.handle_game_event_package(pkg)
         elif op_code <= '\x2f':     # sys info package
             pass
 

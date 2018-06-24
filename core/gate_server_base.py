@@ -25,7 +25,7 @@ class ClientConnection:
 
 class GateServerBase(CommandServer):
 
-    def __init__(self, room_server_class, bind_addr=('0.0.0.0', 20000), server_name='gate_server'):
+    def __init__(self, room_server_class, bind_addr=('0.0.0.0', 10000), server_name='gate_server'):
         CommandServer.__init__(self, server_name)
         self.client_connections = {}    # TODO: this dict might need to be synchronized among threads
         # self.package_client_routing = {}    # ip address => client id
@@ -104,18 +104,19 @@ class GateServerBase(CommandServer):
             print 'client', cid, 'not logged in. quit room failed'
 
     @on_command('send_package')
-    def send_package(self, to_cid, pkg_data, pkg_type):
+    def send_package(self, to_cid, pkg_data, op_code):
         """
-        pkg_type 0 = admin, 1 = game, 2 = sys info
+        send package to to_cid client
         :param to_cid:
         :param pkg_data:
-        :param pkg_type:
+        :param op_code:
         :return:
         """
         if to_cid in self.client_connections:
             remote_ip = self.client_connections[to_cid].remote_ip
             remote_port = self.client_connections[to_cid].remote_port
             # TODO: add op_code and seq to package header
+            pkg_data = pack('<c', op_code) + pack('<i', tkutil.get_current_millisecond_clamped()) + pkg_data
             d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
             print d_len, 'bytes sent'
         else:

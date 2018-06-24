@@ -182,7 +182,7 @@ class GateServer(MessageServer):
             send_data = msg_struct['data'][0] + pack('<i', cur_ms) + msg_struct['data'][1:]
             self.client_connections_lock.acquire()
             if cid not in self.client_connections:
-                print 'client not connected. package not sent'
+                print 'client', cid, ' not connected. package not sent'
             else:
                 # TODO: should use communicator here
                 d_len = self.gate_communicator.send_data(send_data, self.client_connections[cid].remote_ip, self.client_connections[cid].remote_port)

@@ -14,6 +14,7 @@ class ClientInfo:
         self.vid = 0
         self.spawn_slot = 0     # spawn slot of the client in the map
         self.need_update = False    # mask of updating
+        self.latest_stamp = 0
 
 
 class RoomManager(MessageServer):
@@ -26,6 +27,7 @@ class RoomManager(MessageServer):
         self.gate_server_ref = gate_server_ref  # must have a ref to servers server
         self.capacity = cap
         self.clients = {}   # client id : client info
+        self.cur_slots = set()
         self.last_update = time.time()  # last update time in milliseconds
 
     def add_client(self, cid, pkg_data):
@@ -37,7 +39,12 @@ class RoomManager(MessageServer):
             new_client_info = ClientInfo(cid)
             vids = unpack('<i', pkg_data[10:10+4])
             new_client_info.vid = vids[0]
-            new_client_info.spawn_slot = int(len(self.clients))
+
+            assigned_slot = int(len(self.clients))
+            while new_client_info.spawn_slot in self.cur_slots:
+                new_client_info.spawn_slot += 1
+            self.cur_slots.add(assigned_slot)
+            new_client_info.spawn_slot = assigned_slot
 
             print new_client_info.cid
             print new_client_info.vid
@@ -47,6 +54,10 @@ class RoomManager(MessageServer):
             self.clients[cid] = new_client_info
 
             # notify other clients to add new client
+            print 'broadcast spawn to'
+            for client_id in self.clients:
+                print str(client_id) + ', '
+            print 'except', cid
             self.broadcast_data(
                 pack(
                     '<cciii',
@@ -79,8 +90,12 @@ class RoomManager(MessageServer):
         if cid not in self.clients:
             print 'client not exists'
         else:
-            self.clients.pop(cid)
-            print 'client', cid, 'leaves room', self.rid
+            try:
+                self.cur_slots.remove(self.clients[cid].spawn_slot)
+                self.clients.pop(cid)
+                print 'client', cid, 'leaves room', self.rid
+            except Exception, e:
+                print e
 
     def broadcast_data(self, data, exclude_cids=[]):
 
@@ -125,7 +140,9 @@ class RoomManager(MessageServer):
             # print 'room update client'
             # sync client data
             (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', msg_struct['data'])
-            if cid in self.clients:
+            # print cid, ': ', seq, self.clients[cid].latest_stamp
+            if cid in self.clients: #  and self.clients[cid].latest_stamp < seq:
+                self.clients[cid].latest_stamp = seq
                 if self.clients[cid].pos != [pos_x, pos_y, pos_z]:
                     self.clients[cid].pos = [pos_x, pos_y, pos_z]
                     self.clients[cid].need_update = True
