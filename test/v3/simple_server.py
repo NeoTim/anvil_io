@@ -1,7 +1,8 @@
 import socket
 from struct import *
-import lib.tkutil as tkutil
+# import lib.tkutil as tkutil
 import time
+import math
 
 
 class ClientState:
@@ -15,6 +16,18 @@ class ClientState:
         self.latest_stamp = 0
         self.addr = ('', 0)
         self.last_package_stamp = time.time()
+
+
+def get_current_millisecond_clamped():
+    cur_stamp = time.time()
+    int_sec = int(cur_stamp)
+    frac, whole = math.modf(cur_stamp)
+    cur_ms = 0
+    for i in range(6):
+        cur_ms += 10 ** i * (int_sec % 10)
+        int_sec /= 10
+    cur_ms = cur_ms * 1000 + int(frac * 1000)
+    return cur_ms
 
 
 if __name__ == '__main__':
@@ -88,7 +101,7 @@ if __name__ == '__main__':
                             data_sent = pack(
                                 '<ciciii',
                                 '\x12',     # 1 == game package, 2 == game event
-                                tkutil.get_current_millisecond_clamped(),
+                                get_current_millisecond_clamped(),
                                 '\x00',     # event id == 0
                                 existing_cid,
                                 clients[existing_cid].vid,
@@ -109,7 +122,7 @@ if __name__ == '__main__':
                             data_sent = pack(
                                 '<ciciii',
                                 '\x12',  # 1 == game package, 2 == game event
-                                tkutil.get_current_millisecond_clamped(),
+                                get_current_millisecond_clamped(),
                                 '\x00',  # event id == 0
                                 cid,
                                 clients[cid].vid,
@@ -139,7 +152,7 @@ if __name__ == '__main__':
                             )
                 clients[cid].need_update = False
             if state_count > 0:
-                data_sent = pack('<cii', '\x11', tkutil.get_current_millisecond_clamped(), state_count) + data_sent
+                data_sent = pack('<cii', '\x11', get_current_millisecond_clamped(), state_count) + data_sent
                 for target_cid in clients:
                     try:
                         d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
