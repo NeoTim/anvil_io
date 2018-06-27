@@ -10,6 +10,7 @@ class ClientState:
         self.cid = cid
         self.pos = [0, 0, 0]
         self.rot = [0, 0, 0]
+        self.HP = 100
         self.vid = 0
         self.spawn_slot = 0  # spawn slot of the client in the map
         self.need_update = False  # mask of updating
@@ -28,6 +29,16 @@ def get_current_millisecond_clamped():
         int_sec /= 10
     cur_ms = cur_ms * 1000 + int(frac * 1000)
     return cur_ms
+
+
+def broadcast_data(data, sock, clients, excludes=[]):
+    for target_cid in clients:
+        if target_cid not in excludes:
+            try:
+                d_len = sock.sendto(data, clients[target_cid].addr)
+                print d_len, 'bytes sent'
+            except socket.timeout, e:
+                print 'send timeout'
 
 
 if __name__ == '__main__':
@@ -58,26 +69,35 @@ if __name__ == '__main__':
 
         if data:
             op_code = unpack('<c', data[0:0+1])[0]
-            if op_code == '\x11':
-                # game state
+            if op_code == '\x11':   # game state
+                """
+                    | op_code | seq | cid | state |
+                         1       4     4      n
+                """
                 (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', data)
                 if cid in clients:
                     clients[cid].last_package_stamp = time.time()
+                    need_update = False
                     if clients[cid].pos != [pos_x, pos_y, pos_z]:
                         clients[cid].pos = [pos_x, pos_y, pos_z]
-                        clients[cid].need_update = True
+                        need_update = True
                     if clients[cid].rot != [rot_x, rot_y, rot_z]:
                         clients[cid].rot = [rot_x, rot_y, rot_z]
-                        clients[cid].need_update = True
+                        need_update = True
+                    clients[cid].need_update = need_update
                 else:
                     print 'client', cid, 'not logged in. state not sync'
-            elif op_code == '\x12':
-                # game event
-                event_id = unpack('<c', data[5])[0]
-                cid = unpack('<i', data[6:6 + 4])[0]
+            elif op_code == '\x12':     # game event
+                """
+                    | op_code | seq | cid | eid | ...
+                         1       4     4     1
+                """
+                event_id = unpack('<c', data[9])[0]
+                cid = unpack('<i', data[5:5 + 4])[0]
                 print 'event id ' + event_id
                 print 'cid ', cid
-                if event_id == '\x00':  # login event
+                if event_id == '\x00':
+                    # login event
                     print 'login event'
                     vid = unpack('<i', data[10:10 + 4])[0]
                     print 'vehicle id', vid
@@ -99,11 +119,11 @@ if __name__ == '__main__':
                         print 'notify new client of existing clients'
                         for existing_cid in clients:
                             data_sent = pack(
-                                '<ciciii',
+                                '<ciicii',
                                 '\x12',     # 1 == game package, 2 == game event
                                 get_current_millisecond_clamped(),
-                                '\x00',     # event id == 0
                                 existing_cid,
+                                '\x00',     # event id == 0
                                 clients[existing_cid].vid,
                                 clients[existing_cid].spawn_slot
                             )
@@ -120,11 +140,11 @@ if __name__ == '__main__':
                         print 'notify all clients to add new client'
                         for target_cid in clients:
                             data_sent = pack(
-                                '<ciciii',
+                                '<ciicii',
                                 '\x12',  # 1 == game package, 2 == game event
                                 get_current_millisecond_clamped(),
-                                '\x00',  # event id == 0
                                 cid,
+                                '\x00',  # event id == 0
                                 clients[cid].vid,
                                 clients[cid].spawn_slot
                             )
@@ -133,6 +153,46 @@ if __name__ == '__main__':
                                 print d_len, 'bytes sent'
                             except socket.timeout, e:
                                 print 'send timeout'
+                elif event_id == '\x02':
+                    # fire event
+                    """
+                        | header | weapon_id |
+                            10         4
+                    """
+                    print 'fire event'
+                    weapon_id = unpack('<i', data[10:10 + 4])[0]
+                    data_sent = pack(
+                        '<ciici',
+                        '\x12',
+                        get_current_millisecond_clamped(),
+                        cid,
+                        '\x02',
+                        weapon_id
+                    )
+                    broadcast_data(data_sent, sock_server, clients, [cid])
+                elif event_id == '\x03':
+                    # hit event
+                    """
+                        | header | damage | hit_pos | hit_cid |
+                            10        4       4x3        4
+                    """
+                    print 'hit event'
+                    fire_cid = cid
+                    hit_cid = unpack('<i', data[26:26 + 4])[0]
+                    damage = unpack('<i', data[10:10 + 4])[0]
+                    print 'client', cid, 'hit', hit_cid, ', damage', damage
+                    data_sent = pack(
+                        '<ciicii',
+                        '\x12',
+                        get_current_millisecond_clamped(),
+                        hit_cid,
+                        '\x03',
+                        fire_cid,
+                        damage
+                    )
+                    broadcast_data(data_sent, sock_server, clients, [cid])
+                else:
+                    print 'unknown event'
 
         # update client states to all
         if time.time() - last_state_sync > 1.0 / STATE_SYNC_RATE:
