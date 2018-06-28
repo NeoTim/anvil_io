@@ -19,6 +19,29 @@ class ClientState:
         self.last_package_stamp = time.time()
 
 
+class GAME_STATUS:
+    NOT_START = 0
+    RUNNING = 1
+
+
+class GAME_OBJ_TYPE:
+    WEAPON = 0
+    MEDKIT = 1
+    DESTRUCTIBLE_OBJECT = 2
+    GAS_TANK = 3
+
+
+class GAME_WEAPON_TYPE:
+    TURRET_BASIC = 1
+    RPG_ROCKET = 2
+    BIG_GUN = 3
+
+
+class GameModel:
+    def __init__(self):
+        self.game_status = GAME_STATUS.NOT_START
+
+
 def get_current_millisecond_clamped():
     cur_stamp = time.time()
     int_sec = int(cur_stamp)
@@ -29,6 +52,14 @@ def get_current_millisecond_clamped():
         int_sec /= 10
     cur_ms = cur_ms * 1000 + int(frac * 1000)
     return cur_ms
+
+
+def send_data_to_client(data_sent, target_cid):
+    try:
+        d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
+        print d_len, 'bytes sent'
+    except socket.timeout, e:
+        print 'send timeout'
 
 
 def broadcast_data(data, sock, clients, excludes=[]):
@@ -55,6 +86,8 @@ if __name__ == '__main__':
     cur_spawn_slot = 0
 
     last_state_sync = time.time()
+
+    game_model = GameModel()    # game model
 
     print 'gate server listening at', sock_server.getsockname()
 
@@ -153,6 +186,18 @@ if __name__ == '__main__':
                                 print d_len, 'bytes sent'
                             except socket.timeout, e:
                                 print 'send timeout'
+
+                    if not game_model.game_status == GAME_STATUS.RUNNING:
+                        # game start
+                        data_sent = pack(
+                            '<ciic',
+                            '\x12',
+                            get_current_millisecond_clamped(),
+                            0,
+                            '\x04'
+                        )
+                        broadcast_data(data_sent, sock_server, clients, [])
+                        # game_model.game_status = GAME_STATUS.RUNNING    # change game status
                 elif event_id == '\x02':
                     # fire event
                     """
@@ -180,6 +225,7 @@ if __name__ == '__main__':
                     fire_cid = cid
                     hit_cid = unpack('<i', data[26:26 + 4])[0]
                     damage = unpack('<i', data[10:10 + 4])[0]
+                    damage *= 0.96
                     print 'client', cid, 'hit', hit_cid, ', damage', damage
                     data_sent = pack(
                         '<ciicii',
@@ -190,7 +236,23 @@ if __name__ == '__main__':
                         fire_cid,
                         damage
                     )
-                    broadcast_data(data_sent, sock_server, clients, [cid])
+                    broadcast_data(data_sent, sock_server, clients, [])
+                elif event_id == '\x04':
+                    # pick up weapon event
+                    print 'pick up weapon event'
+                    data_sent = pack(
+                        '<ciiciii',
+                        '\x12',
+                        get_current_millisecond_clamped(),
+                        cid,
+                        '\x07',
+                        unpack('<i', data[10:10 + 4])[0],
+                        unpack('<i', data[14:14 + 4])[0],
+                        unpack('<i', data[18:18 + 4])[0]
+                    )
+                    # TODO: use server timestamp in the sent data
+                    broadcast_data(data_sent, sock_server, clients, [])
+                    pass
                 else:
                     print 'unknown event'
 
@@ -225,5 +287,6 @@ if __name__ == '__main__':
             if time.time() - clients[cid].last_package_stamp > MAX_NO_RESPONSE:
                 print 'timeout. client', cid, 'connection closed'
                 clients.pop(cid, None)
+
 
 
