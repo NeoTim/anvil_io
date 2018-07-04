@@ -107,6 +107,9 @@ class GateServerBase(CommandServer):
     def send_package(self, to_cid, pkg_data, op_code):
         """
         send package to to_cid client
+        header:
+            | op_code | seq |
+                 1       4
         :param to_cid:
         :param pkg_data:
         :param op_code:
@@ -115,8 +118,8 @@ class GateServerBase(CommandServer):
         if to_cid in self.client_connections:
             remote_ip = self.client_connections[to_cid].remote_ip
             remote_port = self.client_connections[to_cid].remote_port
-            # TODO: add op_code and seq to package header
-            pkg_data = pack('<c', op_code) + pack('<i', tkutil.get_current_millisecond_clamped()) + pkg_data
+            # add header
+            pkg_data = pack('<ci', op_code, tkutil.get_current_millisecond_clamped()) + pkg_data
             d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
             print d_len, 'bytes sent'
         else:

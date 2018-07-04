@@ -3,6 +3,10 @@ from struct import *
 # import lib.tkutil as tkutil
 import time
 import math
+import sys
+import select
+import threading
+import Queue
 
 
 class ClientState:
@@ -72,6 +76,18 @@ def broadcast_data(data, sock, clients, excludes=[]):
                 print 'send timeout'
 
 
+class ConsoleThread(threading.Thread):
+    def __init__(self, console_buffer):
+        threading.Thread.__init__(self)
+        self.console_buffer = console_buffer
+
+    def run(self):
+        while True:
+            input_data = raw_input()
+            print 'get input', input_data
+            self.console_buffer.put(input_data)
+
+
 if __name__ == '__main__':
 
     MAX_NO_RESPONSE = 10
@@ -88,6 +104,11 @@ if __name__ == '__main__':
     last_state_sync = time.time()
 
     game_model = GameModel()    # game model
+
+    console_input = Queue.Queue()  # buffer of console input
+    console_thread = ConsoleThread(console_input)
+    console_thread.daemon = True
+    console_thread.start()
 
     print 'gate server listening at', sock_server.getsockname()
 
@@ -162,7 +183,7 @@ if __name__ == '__main__':
                             )
                             try:
                                 d_len = sock_server.sendto(data_sent, new_client_state.addr)
-                                print d_len, 'bytes sent'
+                                # print d_len, 'bytes sent'
                             except socket.timeout, e:
                                 print 'send timeout'
 
@@ -183,7 +204,7 @@ if __name__ == '__main__':
                             )
                             try:
                                 d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
-                                print d_len, 'bytes sent'
+                                # print d_len, 'bytes sent'
                             except socket.timeout, e:
                                 print 'send timeout'
 
@@ -240,19 +261,36 @@ if __name__ == '__main__':
                 elif event_id == '\x04':
                     # pick up weapon event
                     print 'pick up weapon event'
-                    data_sent = pack(
-                        '<ciiciii',
-                        '\x12',
-                        get_current_millisecond_clamped(),
-                        cid,
-                        '\x07',
-                        unpack('<i', data[10:10 + 4])[0],
-                        unpack('<i', data[14:14 + 4])[0],
-                        unpack('<i', data[18:18 + 4])[0]
-                    )
-                    # TODO: use server timestamp in the sent data
-                    broadcast_data(data_sent, sock_server, clients, [])
-                    pass
+                    weapon_id = unpack('<i', data[10:10 + 4])[0]
+
+                    pick_success = True
+
+                    if pick_success:
+                        # destroy weapon event
+                        data_sent = pack(
+                            '<ciici',
+                            '\x12',
+                            get_current_millisecond_clamped(),
+                            cid,
+                            '\x06',
+                            weapon_id
+                        )
+                        broadcast_data(data_sent, sock_server, clients, [])
+
+                        # equip weapon event
+                        data_sent = pack(
+                            '<ciiciii',
+                            '\x12',
+                            get_current_millisecond_clamped(),
+                            cid,
+                            '\x07',
+                            weapon_id,
+                            unpack('<i', data[14:14 + 4])[0],
+                            unpack('<i', data[18:18 + 4])[0]
+                        )
+                        broadcast_data(data_sent, sock_server, clients, [])
+
+
                 else:
                     print 'unknown event'
 
@@ -278,15 +316,42 @@ if __name__ == '__main__':
                 for target_cid in clients:
                     try:
                         d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
-                        print d_len, 'bytes sent'
+                        # print d_len, 'bytes sent'
                     except Exception, e:
                         pass
 
         # check connection timeout
-        for cid in [ccid for ccid in clients]:
-            if time.time() - clients[cid].last_package_stamp > MAX_NO_RESPONSE:
-                print 'timeout. client', cid, 'connection closed'
-                clients.pop(cid, None)
+        if True:  # game_model.game_status == GAME_STATUS.RUNNING:
+            for cid in [ccid for ccid in clients]:
+                if time.time() - clients[cid].last_package_stamp > MAX_NO_RESPONSE:
+                    print 'timeout. client', cid, 'connection closed'
+                    clients.pop(cid, None)
+                    if len(clients) == 0:
+                        print 'all clients logged out'
+
+        # check console input
+        try:
+            console_str = console_input.get(block=False)
+            if console_str == 's':
+                # start game
+                print 'game start'
+                data_sent = pack(
+                    '<ciic',
+                    '\x12',
+                    get_current_millisecond_clamped(),
+                    0,
+                    '\x04'
+                )
+                broadcast_data(data_sent, sock_server, clients, [])
+                game_model.game_status = GAME_STATUS.RUNNING
+                pass
+            elif console_str == 'e':
+                # end game
+                print 'end game'
+                game_model.game_status = GAME_STATUS.NOT_START
+        except Queue.Empty, e:
+            pass
+
 
 
 
