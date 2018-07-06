@@ -188,6 +188,7 @@ class ServerGameEvent(GameEvent):
 
 class GameEventManager:
 
+    # event id => event class, event handler (function)
     CLIENT_GAME_EVENTS = ROOM_SERVER_STRUCTS['client_game_event_regs']
     SERVER_GAME_EVENTS = ROOM_SERVER_STRUCTS['server_game_event_regs']
 
@@ -294,7 +295,7 @@ class RoomServerBase(CommandServer):
         :return:
         """
         try:
-            if time.time() - self.last_client_sync > self.CLIENT_UPDATE_RATE:
+            if time.time() - self.last_client_sync > 1.0 / self.CLIENT_UPDATE_RATE:
                 self.last_client_sync = time.time()
                 client_state_count = 0
                 data_to_send = ''
@@ -302,7 +303,7 @@ class RoomServerBase(CommandServer):
                     data_to_send += pack('<i', cid) + self.pack_client_state(cid)
                     client_state_count += 1
                 data_to_send = pack('<i', client_state_count) + data_to_send
-                if len(data_to_send):
+                if client_state_count > 0:
                     # broadcast client states
                     for target_cid in self.client_infos:
                         self.gate_server_ref.run_command(
@@ -314,13 +315,17 @@ class RoomServerBase(CommandServer):
         except Exception, e:
             print e
 
+    def update_client_state(self, cid, new_state):
+        """ method to update client state given new state data"""
+        # TODO: try not new client state
+        self.client_infos[cid].state = new_state
+
     def handle_client_state_package(self, pkg):
         """ | op_code | seq | cid | state """
-        (op_code, seq, cid) = unpack('<cii', pkg[0:9])
+        (op_code, seq, cid) = unpack('<cii', pkg.data[0:9])
         new_state = self.unpack_client_state(pkg.data[9:])
         # update client state
-        # TODO: try not new state
-        self.client_infos[cid].state = new_state
+        self.update_client_state(cid, new_state)
 
     def handle_game_event_package(self, pkg):
         """ | op_code | seq | cid | eid | event data """

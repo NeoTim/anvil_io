@@ -25,7 +25,7 @@ class ClientConnection:
 
 class GateServerBase(CommandServer):
 
-    def __init__(self, room_server_class, bind_addr=('0.0.0.0', 10000), server_name='gate_server'):
+    def __init__(self, room_server_class, bind_addr=('0.0.0.0', 20000), server_name='gate_server'):
         CommandServer.__init__(self, server_name)
         self.client_connections = {}    # TODO: this dict might need to be synchronized among threads
         # self.package_client_routing = {}    # ip address => client id
@@ -89,7 +89,7 @@ class GateServerBase(CommandServer):
                 print 'client already in room ', self.client_connections[cid].at_room
             else:
                 print 'pass client', cid, 'to room', room_id
-                target_room.run_command('add_client', cid, pkg.data)
+                target_room.run_command('add_client', cid)
                 self.client_connections[cid].at_room = room_id
 
     def quit_room(self, cid):
@@ -121,7 +121,7 @@ class GateServerBase(CommandServer):
             # add header
             pkg_data = pack('<ci', op_code, tkutil.get_current_millisecond_clamped()) + pkg_data
             d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
-            print d_len, 'bytes sent'
+            print d_len, 'bytes sent to', remote_ip, remote_port
         else:
             print 'client', to_cid, 'not connected. no data sent'
 
@@ -141,13 +141,14 @@ class GateServerBase(CommandServer):
         if data:
             pkg = NetPackage(data, addr[0], addr[1])
             # update client last response time
-            target_cid = unpack('<i', data[5:5 + 4])
-            self.client_connections[target_cid].last_package_time = time.time()
+            target_cid = unpack('<i', data[5:5 + 4])[0]
+            if target_cid in self.client_connections:
+                self.client_connections[target_cid].last_package_time = time.time()
         if pkg:
             try:
-                op_code = unpack('<c', data[0])
+                op_code = unpack('<c', data[0])[0]
                 # int_op_code = tkutil.get_int_from_byte(op_code)
-                target_cid = unpack('<i', data[5:5+4])
+                target_cid = unpack('<i', data[5:5+4])[0]
                 if op_code <= '\x0f':  # admin package
                     if op_code == '\x01':   # login
                         token = self.parse_token(data)
@@ -155,9 +156,23 @@ class GateServerBase(CommandServer):
                     elif op_code == '\x02':  # logout
                         self.logout_client(target_cid)
                 elif op_code <= '\x1f':  # game package
-                    at_room = self.client_connections[target_cid]
-                    if at_room >= 0:
-                        self.room_servers[at_room].run_command('handle_package', pkg)
+
+                    # TODO: move login handling to admin package
+                    if op_code == '\x12':
+                        event_id = unpack('<c', data[9:10])[0]
+                        if event_id == '\x00':
+                            print 'login event'
+                            token = self.parse_token(data)
+                            self.login_client(target_cid, token, addr[0], addr[1])
+
+                            # TODO: move join room to separate package
+                            print 'join room event'
+                            self.assign_room(target_cid, pkg)
+
+                    if target_cid in self.client_connections:
+                        at_room = self.client_connections[target_cid].at_room
+                        if at_room >= 0:
+                            self.room_servers[at_room].run_command('handle_package', pkg)
                 elif op_code <= '\x2f':  # sys info package
                     pass
             except KeyError, e:
