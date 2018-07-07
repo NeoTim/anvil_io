@@ -130,16 +130,16 @@ if __name__ == '__main__':
                     | op_code | seq | cid | state |
                          1       4     4      n
                 """
-                (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', data)
-                # (op_code, seq, cid, grid_ind_x, grid_ind_y, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciicccchccc', data)
+                # (op_code, seq, cid, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciiiiiiii', data)
+                (op_code, seq, cid, grid_ind_x, grid_ind_y, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<ciicccchccc', data)
                 # print ord(grid_ind_x), ord(grid_ind_y), ord(pos_x), ord(pos_y), pos_z, ord(rot_x), ord(rot_y), ord(rot_z)
                 if cid in clients:
                     clients[cid].last_package_stamp = time.time()
                     need_update = False
-                    # if clients[cid].grid_x != grid_ind_x or clients[cid].grid_y != grid_ind_y:
-                    #     clients[cid].grid_x = grid_ind_x
-                    #     clients[cid].grid_y = grid_ind_y
-                    #     need_update = True
+                    if clients[cid].grid_x != grid_ind_x or clients[cid].grid_y != grid_ind_y:
+                        clients[cid].grid_x = grid_ind_x
+                        clients[cid].grid_y = grid_ind_y
+                        need_update = True
                     if clients[cid].pos != [pos_x, pos_y, pos_z]:
                         clients[cid].pos = [pos_x, pos_y, pos_z]
                         need_update = True
@@ -313,10 +313,11 @@ if __name__ == '__main__':
                     pos = clients[cid].pos
                     rot = clients[cid].rot
                     data_sent += pack(
-                                '<iiiiiii',  # '<icccchccc',
+                                # '<iiiiiii',
+                                '<icccchccc',
                                 cid,
-                                # clients[cid].grid_x,
-                                # clients[cid].grid_y,
+                                clients[cid].grid_x,
+                                clients[cid].grid_y,
                                 pos[0], pos[1], pos[2],
                                 rot[0], rot[1], rot[2]
                             )
