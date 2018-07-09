@@ -297,8 +297,15 @@ if __name__ == '__main__':
                             unpack('<i', data[18:18 + 4])[0]
                         )
                         broadcast_data(data_sent, sock_server, clients, [])
-
-
+                elif event_id == '\x06':    # ping event
+                    data_sent = pack(
+                        '<ciic',
+                        '\x12',
+                        get_current_millisecond_clamped(),
+                        cid,
+                        '\x08'
+                    )
+                    send_data_to_client(data_sent, cid)
                 else:
                     print 'unknown event'
 
