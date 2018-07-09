@@ -6,6 +6,7 @@ import time
 def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('0.0.0.0', 10000))
+    print 'listening'
     try:
         while True:
             data, addr = sock.recvfrom(1024)
@@ -23,3 +24,6 @@ def main():
     finally:
         print 'socket close'
         sock.close()
+
+if __name__ == '__main__':
+    main()
