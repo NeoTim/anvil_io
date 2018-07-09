@@ -54,6 +54,12 @@ class EventClientDropWeapon(ClientGameEvent):
     ]
 
 
+@app_client_game_event
+class EventClientPing(ClientGameEvent):
+    event_id = '\x06'
+    var_struct = []
+
+
 # server game events
 @app_server_game_event
 class EventServerSpawnPlayer(ServerGameEvent):
@@ -122,6 +128,12 @@ class EventServerEquipWeapon(ServerGameEvent):
     ]
 
 
+@app_server_game_event
+class EventServerEchoPing(ServerGameEvent):
+    event_id = '\x08'
+    var_struct = []
+
+
 class TinkrGarageRoom(RoomServerBase):
 
     class ClientState:
@@ -131,6 +143,7 @@ class TinkrGarageRoom(RoomServerBase):
             self.vid = 0
             self.HP = 100
             self.spawn_slot = 0
+            self.is_faked = False   # if a client is AI
 
     class GameModel:
         def __init__(self):
@@ -211,6 +224,7 @@ class TinkrGarageRoom(RoomServerBase):
 
     @on_client_game_event(EventClientExitGame)
     def on_client_exit_game(self, evt):
+        # TODO: quit room
         pass
 
     @on_client_game_event(EventClientFire)
@@ -272,6 +286,25 @@ class TinkrGarageRoom(RoomServerBase):
             evt_equip_weapon.var['weapon_type'] = weapon_type
             evt_equip_weapon.var['equip_slot'] = equip_slot
             self.game_event_manager.broadcast_server_event(evt_equip_weapon)
+
+    @on_client_game_event(EventClientPing)
+    def on_client_ping(self, evt):
+        echo_evt = EventServerEchoPing
+        self.game_event_manager.send_server_event(evt.from_cid, echo_evt)
+
+    def spawn_fake_clients(self, num):
+        """
+        num == number of fake clients
+        :param num:
+        :return:
+        """
+        n = 0
+        to_spawn_cid = 20001
+        while n < num:
+            if to_spawn_cid not in self.client_infos:
+                self.add_client(to_spawn_cid)
+                to_spawn_cid += 1
+        pass
 
 
 if __name__ == '__main__':

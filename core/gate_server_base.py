@@ -25,7 +25,7 @@ class ClientConnection:
 
 class GateServerBase(CommandServer):
 
-    def __init__(self, room_server_class, bind_addr=('0.0.0.0', 20000), server_name='gate_server'):
+    def __init__(self, room_server_class, bind_addr=('0.0.0.0', 10000), server_name='gate_server'):
         CommandServer.__init__(self, server_name)
         self.client_connections = {}    # TODO: this dict might need to be synchronized among threads
         # self.package_client_routing = {}    # ip address => client id
