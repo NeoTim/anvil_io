@@ -1,6 +1,5 @@
 from command_server import *
 import time
-from core.network.net_package import NetPackage
 import copy
 import inspect
 from struct import *
@@ -314,6 +313,7 @@ class RoomServerBase(CommandServer):
                         )
         except Exception, e:
             print e
+            print 'sync states error'
 
     def update_client_state(self, cid, new_state):
         """ method to update client state given new state data"""
@@ -382,12 +382,16 @@ class RoomServerBase(CommandServer):
         except Exception, e:
             print e
 
+    def tick_extra(self):
+        pass
+
     def loop(self):
         try:
             while True:
                 self.tick_command()
                 self.tick_game_event()
                 self.tick_client_state_sync()
+                self.tick_extra()
                 pass
         except Exception, e:
             print e

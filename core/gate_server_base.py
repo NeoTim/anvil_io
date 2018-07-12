@@ -1,18 +1,17 @@
 from command_server import *
-from room_server_base import RoomServerBase
 from network.net_communicator import NetCommunicator
 from network.net_package import NetPackage
 import socket
 from struct import *
 import time
-import lib.tkutil as tkutil
+import tkutil
 
 
 class ClientConnection:
     """
     client connection model
     """
-    MAX_NO_RESPONSE = 5    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 15    # max seconds with no response from client before disconnect it
 
     def __init__(self, r_ip, r_port, sock_c=None):
         self.sock_c = sock_c
@@ -123,7 +122,8 @@ class GateServerBase(CommandServer):
             d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
             print d_len, 'bytes sent to', remote_ip, remote_port
         else:
-            print 'client', to_cid, 'not connected. no data sent'
+            # print 'client', to_cid, 'not connected. no data sent'
+            pass
 
     def parse_token(self, pkg_data):
         # TODO: should be overwritten. return the client token from the package data
@@ -219,3 +219,11 @@ if __name__ == '__main__':
     rs_class = TinkrGarageRoom
     gs = GateServerBase(rs_class)
     gs.start_server()
+
+    # spawn fake clients
+    round = 0
+    while round == 0:
+        if 0 in gs.room_servers and round == 0:
+            gs.room_servers[0].run_command('spawn_fake_clients', 1)
+            round += 1
+    print 'done'

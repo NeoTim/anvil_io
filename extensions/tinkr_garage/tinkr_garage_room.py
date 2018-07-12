@@ -138,9 +138,11 @@ class TinkrGarageRoom(RoomServerBase):
 
     class ClientState:
         def __init__(self):
-            self.pos = [0, 0, 0]
-            self.rot = [0, 0, 0]
-            self.vid = 0
+            self.grid_x = '\x15'
+            self.grid_y = '\x33'
+            self.pos = ['\xa0', '\xa0', 2200]
+            self.rot = ['\x00', '\x00', '\x00']
+            self.vid = 3
             self.HP = 100
             self.spawn_slot = 0
             self.is_faked = False   # if a client is AI
@@ -154,7 +156,12 @@ class TinkrGarageRoom(RoomServerBase):
 
     def pack_client_state(self, cid):
         state = self.client_infos[cid].state
-        return pack('<iiiiii', state.pos[0], state.pos[1], state.pos[2], state.rot[0], state.rot[1], state.rot[2])
+        # print unpack('<h', state.grid_x + '\x00')
+        # print unpack('<h', state.grid_y + '\x00')
+        # print unpack('<h', state.pos[0] + '\x00')
+        # print unpack('<h', state.pos[1] + '\x00')
+        # print state.pos[2]
+        return pack('<cccchccc', state.grid_x, state.grid_y, state.pos[0], state.pos[1], state.pos[2], state.rot[0], state.rot[1], state.rot[2])
 
     def unpack_client_state(self, state_data):
         """
@@ -163,7 +170,9 @@ class TinkrGarageRoom(RoomServerBase):
         :return:
         """
         state = self.ClientState()
-        (pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<iiiiii', state_data)
+        (grid_x, grid_y, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<cccchccc', state_data)
+        state.grid_x = grid_x
+        state.grid_y = grid_y
         state.pos[0] = pos_x
         state.pos[1] = pos_y
         state.pos[2] = pos_z
@@ -173,8 +182,10 @@ class TinkrGarageRoom(RoomServerBase):
         return state
 
     def update_client_state(self, cid, new_state):
-        self.client_infos[cid].pos = new_state.pos
-        self.client_infos[cid].rot = new_state.rot
+        self.client_infos[cid].state.grid_x = new_state.grid_x
+        self.client_infos[cid].state.grid_y = new_state.grid_y
+        self.client_infos[cid].state.pos = new_state.pos
+        self.client_infos[cid].state.rot = new_state.rot
 
     @on_client_game_event(EventClientJoinGame)
     def on_client_join_game(self, evt):
@@ -203,6 +214,7 @@ class TinkrGarageRoom(RoomServerBase):
                     evt_spawn_old.from_cid = existing_cid
                     evt_spawn_old.var['car_id'] = self.client_infos[existing_cid].state.vid
                     evt_spawn_old.var['spawn_slot'] = self.client_infos[existing_cid].state.spawn_slot
+                    print 'client', existing_cid, 'spawn_slot', evt_spawn_old.var['spawn_slot']
                     self.game_event_manager.send_server_event(cid, evt_spawn_old)
 
             # add new client to map
@@ -214,6 +226,7 @@ class TinkrGarageRoom(RoomServerBase):
             evt_spawn_new.from_cid = cid
             evt_spawn_new.var['car_id'] = self.client_infos[cid].state.vid
             evt_spawn_new.var['spawn_slot'] = self.client_infos[cid].state.spawn_slot
+            print 'client', cid, 'spawn_slot', evt_spawn_new.var['spawn_slot']
             # broadcast event
             self.game_event_manager.broadcast_server_event(evt_spawn_new, [])
 
@@ -256,7 +269,7 @@ class TinkrGarageRoom(RoomServerBase):
         damage *= 0.96
         print 'client', fire_cid, 'hit', hit_cid, ', damage', damage
         evt_damage = EventServerDamage()
-        evt_damage.from_cid = fire_cid
+        evt_damage.from_cid = hit_cid
         evt_damage.var['fire_cid'] = fire_cid
         evt_damage.var['damage'] = damage
         self.game_event_manager.broadcast_server_event(evt_damage)
@@ -292,6 +305,22 @@ class TinkrGarageRoom(RoomServerBase):
         echo_evt = EventServerEchoPing
         self.game_event_manager.send_server_event(evt.from_cid, echo_evt)
 
+    def tick_extra(self):
+        # update fake clients
+        # if 10004 in self.client_infos:
+        #     if int(time.time()) % 5 == 0:
+        #         self.client_infos[10004].state.pos[0] = '\xa3'
+        #     else:
+        #         self.client_infos[10004].state.pos[0] = '\xa7'
+        # for cid in self.client_infos:
+        #     state = self.client_infos[cid].state
+        #     print state.grid_x
+        #     print state.grid_y
+        #     print state.pos
+        #     print state.rot
+        pass
+
+    @on_command('spawn_fake_clients')
     def spawn_fake_clients(self, num):
         """
         num == number of fake clients
@@ -299,11 +328,24 @@ class TinkrGarageRoom(RoomServerBase):
         :return:
         """
         n = 0
-        to_spawn_cid = 20001
+        to_spawn_cid = 10003
         while n < num:
             if to_spawn_cid not in self.client_infos:
                 self.add_client(to_spawn_cid)
+                self.client_infos[to_spawn_cid].state.is_faked = True
+                # ['\xa0', '\xa0', 2200]
+                self.client_infos[to_spawn_cid].state.pos[2] += 1000 * (n + 1)
+                if n == 0:
+                    self.client_infos[to_spawn_cid].state.pos[0] = '\xaa'
+                    self.client_infos[to_spawn_cid].state.grid_x = '\x16'
+                if n == 1:
+                    self.client_infos[to_spawn_cid].state.pos[0] = '\xa0'
+                join_evt = EventClientJoinGame()
+                join_evt.from_cid = to_spawn_cid
+                join_evt.var['car_id'] = 1
+                self.on_client_join_game(join_evt)
                 to_spawn_cid += 1
+                n += 1
         pass
 
 

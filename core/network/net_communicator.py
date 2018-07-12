@@ -62,6 +62,8 @@ class NetCommunicator:
                 data, addr = self.sock.recvfrom(1024)
             except socket.timeout:
                 pass
+            except Exception, e:
+                print e
         if data:
             return [data, addr]
         return [None, None]
