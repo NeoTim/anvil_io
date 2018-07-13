@@ -307,15 +307,21 @@ class TinkrGarageRoom(RoomServerBase):
 
     def tick_extra(self):
         # update fake clients
-        # if 10004 in self.client_infos:
-        #     if int(time.time()) % 5 == 0:
-        #         self.client_infos[10004].state.pos[0] = '\xa3'
-        #     else:
-        #         self.client_infos[10004].state.pos[0] = '\xa7'
+        ai_ind = 0
+        if ai_ind in self.client_infos:
+            int_sec = int(time.time())
+            if int_sec % 9 == 0:
+                self.client_infos[ai_ind].state.pos[0] = '\xa3'
+                self.client_infos[ai_ind].state.pos[1] = '\xa3'
+            elif int_sec % 6 == 0:
+                self.client_infos[ai_ind].state.pos[0] = '\xff'
+                self.client_infos[ai_ind].state.pos[1] = '\xff'
+            elif int_sec % 3 == 0:
+                self.client_infos[ai_ind].state.pos[0] = '\x33'
+                self.client_infos[ai_ind].state.pos[1] = '\x33'
         # for cid in self.client_infos:
         #     state = self.client_infos[cid].state
-        #     print state.grid_x
-        #     print state.grid_y
+        #     print 'client ', cid
         #     print state.pos
         #     print state.rot
         pass
@@ -328,18 +334,23 @@ class TinkrGarageRoom(RoomServerBase):
         :return:
         """
         n = 0
-        to_spawn_cid = 10003
+        to_spawn_cid = 0
         while n < num:
             if to_spawn_cid not in self.client_infos:
                 self.add_client(to_spawn_cid)
                 self.client_infos[to_spawn_cid].state.is_faked = True
                 # ['\xa0', '\xa0', 2200]
-                self.client_infos[to_spawn_cid].state.pos[2] += 1000 * (n + 1)
-                if n == 0:
-                    self.client_infos[to_spawn_cid].state.pos[0] = '\xaa'
-                    self.client_infos[to_spawn_cid].state.grid_x = '\x16'
-                if n == 1:
-                    self.client_infos[to_spawn_cid].state.pos[0] = '\xa0'
+                self.client_infos[to_spawn_cid].state.pos[2] += n * 50
+                pos_x = self.client_infos[to_spawn_cid].state.pos[0]
+                pos_x = unpack('<h', pos_x + '\x00')[0]
+                pos_x += n * 2
+                pos_x = pack('<h', pos_x)[0]
+                self.client_infos[to_spawn_cid].state.pos[0] = pos_x
+                # if n == 0:
+                #     self.client_infos[to_spawn_cid].state.pos[0] = '\xaa'
+                #     self.client_infos[to_spawn_cid].state.grid_x = '\x16'
+                # if n == 1:
+                #     self.client_infos[to_spawn_cid].state.pos[0] = '\xa0'
                 join_evt = EventClientJoinGame()
                 join_evt.from_cid = to_spawn_cid
                 join_evt.var['car_id'] = 1

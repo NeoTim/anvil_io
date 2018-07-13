@@ -11,7 +11,7 @@ class ClientConnection:
     """
     client connection model
     """
-    MAX_NO_RESPONSE = 15    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 10    # max seconds with no response from client before disconnect it
 
     def __init__(self, r_ip, r_port, sock_c=None):
         self.sock_c = sock_c
@@ -223,7 +223,8 @@ if __name__ == '__main__':
     # spawn fake clients
     round = 0
     while round == 0:
-        if 0 in gs.room_servers and round == 0:
+        if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
+            time.sleep(5)
             gs.room_servers[0].run_command('spawn_fake_clients', 1)
             round += 1
     print 'done'

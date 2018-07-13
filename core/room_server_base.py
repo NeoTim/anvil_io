@@ -235,7 +235,7 @@ class GameEventManager:
 
 class RoomServerBase(CommandServer):
 
-    CLIENT_UPDATE_RATE = 20     # 20fps
+    CLIENT_UPDATE_RATE = 15     # 20fps
 
     class ClientState:
         """ class of client state """
@@ -305,6 +305,9 @@ class RoomServerBase(CommandServer):
                 if client_state_count > 0:
                     # broadcast client states
                     for target_cid in self.client_infos:
+                        if self.client_infos[target_cid].state.is_faked:
+                            # print 'no data sent to AI'
+                            continue
                         self.gate_server_ref.run_command(
                             'send_package',
                             target_cid,

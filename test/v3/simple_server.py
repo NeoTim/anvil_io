@@ -12,10 +12,10 @@ import Queue
 class ClientState:
     def __init__(self, cid):
         self.cid = cid
-        self.grid_x = 0
-        self.grid_y = 0
-        self.pos = [0, 0, 0]
-        self.rot = [0, 0, 0]
+        self.grid_x = '\x15'
+        self.grid_y = '\x33'
+        self.pos = ['\xa0', '\xa0', 2200]
+        self.rot = ['\x00', '\x00', '\x00']
         self.HP = 100
         self.vid = 0
         self.spawn_slot = 0  # spawn slot of the client in the map
@@ -50,20 +50,19 @@ class GameModel:
 
 def get_current_millisecond_clamped():
     cur_stamp = time.time()
-    int_sec = int(cur_stamp)
-    frac, whole = math.modf(cur_stamp)
-    cur_ms = 0
-    for i in range(6):
-        cur_ms += 10 ** i * (int_sec % 10)
-        int_sec /= 10
-    cur_ms = cur_ms * 1000 + int(frac * 1000)
+    cur_ms = int(cur_stamp * 1000) % 604800000
     return cur_ms
 
 
 def send_data_to_client(data_sent, target_cid):
     try:
+        if not clients[target_cid].addr:
+            # AI as no addr
+            return
         d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
-        print d_len, 'bytes sent'
+        if d_len > 40:
+            print d_len, ' sent'
+        # print d_len, 'bytes sent'
     except socket.timeout, e:
         print 'send timeout'
 
@@ -72,10 +71,81 @@ def broadcast_data(data, sock, clients, excludes=[]):
     for target_cid in clients:
         if target_cid not in excludes:
             try:
+                if not clients[target_cid].addr:
+                    # AI as no addr
+                    continue
                 d_len = sock.sendto(data, clients[target_cid].addr)
-                print d_len, 'bytes sent'
+                # print d_len, 'bytes sent'
             except socket.timeout, e:
                 print 'send timeout'
+
+
+def on_client_join_game(data, addr, cid, clients):
+    # login event
+    print 'login event'
+    vid = unpack('<i', data[10:10 + 4])[0]
+    print 'vehicle id', vid
+    token = 0
+    login_success = False
+    if cid in clients:
+        print 'client', cid, 'already logged in'
+    else:
+        login_success = True
+    if login_success:
+        # add client
+        new_client_state = ClientState(cid)
+        if addr:
+            new_client_state.addr = (addr[0], addr[1])
+        else:
+            # AI has no addr
+            new_client_state.addr = None
+        new_client_state.vid = vid
+        new_client_state.spawn_slot = len(clients)  # cur_spawn_slot
+        # cur_spawn_slot += 1
+
+        # add new client to map
+        clients[cid] = new_client_state
+
+        # notify new client of existing clients
+        print 'notify new client of existing clients'
+        for existing_cid in clients:
+            if existing_cid != cid:
+                data_sent = pack(
+                    '<ciicii',
+                    '\x12',  # 1 == game package, 2 == game event
+                    get_current_millisecond_clamped(),
+                    existing_cid,
+                    '\x00',  # event id == 0
+                    clients[existing_cid].vid,
+                    clients[existing_cid].spawn_slot
+                )
+                send_data_to_client(data_sent, cid)
+
+        # notify all clients to add new client
+        print 'notify all clients to add new client'
+        for target_cid in clients:
+            data_sent = pack(
+                '<ciicii',
+                '\x12',  # 1 == game package, 2 == game event
+                get_current_millisecond_clamped(),
+                cid,
+                '\x00',  # event id == 0
+                clients[cid].vid,
+                clients[cid].spawn_slot
+            )
+            send_data_to_client(data_sent, target_cid)
+
+    if not game_model.game_status == GAME_STATUS.RUNNING:
+        # game start
+        data_sent = pack(
+            '<ciic',
+            '\x12',
+            get_current_millisecond_clamped(),
+            0,
+            '\x04'
+        )
+        broadcast_data(data_sent, sock_server, clients, [])
+        # game_model.game_status = GAME_STATUS.RUNNING    # change game status
 
 
 class ConsoleThread(threading.Thread):
@@ -96,7 +166,7 @@ if __name__ == '__main__':
     STATE_SYNC_RATE = 20
 
     sock_server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_server.bind(('0.0.0.0', 10000))
+    sock_server.bind(('0.0.0.0', 20000))
     sock_server.setblocking(0)
 
     clients = {}    # cid => client state
@@ -135,7 +205,7 @@ if __name__ == '__main__':
                 # print ord(grid_ind_x), ord(grid_ind_y), ord(pos_x), ord(pos_y), pos_z, ord(rot_x), ord(rot_y), ord(rot_z)
                 if cid in clients:
                     clients[cid].last_package_stamp = time.time()
-                    need_update = False
+                    need_update = True
                     if clients[cid].grid_x != grid_ind_x or clients[cid].grid_y != grid_ind_y:
                         clients[cid].grid_x = grid_ind_x
                         clients[cid].grid_y = grid_ind_y
@@ -159,74 +229,77 @@ if __name__ == '__main__':
                 print 'event id ' + event_id
                 print 'cid ', cid
                 if event_id == '\x00':
-                    # login event
-                    print 'login event'
-                    vid = unpack('<i', data[10:10 + 4])[0]
-                    print 'vehicle id', vid
-                    token = 0
-                    login_success = False
-                    if cid in clients:
-                        print 'client', cid, 'already logged in'
-                    else:
-                        login_success = True
-                    if login_success:
-                        # add client
-                        new_client_state = ClientState(cid)
-                        new_client_state.addr = (addr[0], addr[1])
-                        new_client_state.vid = vid
-                        new_client_state.spawn_slot = len(clients) # cur_spawn_slot
-                        cur_spawn_slot += 1
+                    # # login event
+                    # print 'login event'
+                    # vid = unpack('<i', data[10:10 + 4])[0]
+                    # print 'vehicle id', vid
+                    # token = 0
+                    # login_success = False
+                    # if cid in clients:
+                    #     print 'client', cid, 'already logged in'
+                    # else:
+                    #     login_success = True
+                    # if login_success:
+                    #     # add client
+                    #     new_client_state = ClientState(cid)
+                    #     new_client_state.addr = (addr[0], addr[1])
+                    #     new_client_state.vid = vid
+                    #     new_client_state.spawn_slot = len(clients) # cur_spawn_slot
+                    #     cur_spawn_slot += 1
+                    #
+                    #     # notify new client of existing clients
+                    #     print 'notify new client of existing clients'
+                    #     for existing_cid in clients:
+                    #         data_sent = pack(
+                    #             '<ciicii',
+                    #             '\x12',     # 1 == game package, 2 == game event
+                    #             get_current_millisecond_clamped(),
+                    #             existing_cid,
+                    #             '\x00',     # event id == 0
+                    #             clients[existing_cid].vid,
+                    #             clients[existing_cid].spawn_slot
+                    #         )
+                    #         try:
+                    #             d_len = sock_server.sendto(data_sent, new_client_state.addr)
+                    #             # print d_len, 'bytes sent'
+                    #         except socket.timeout, e:
+                    #             print 'send timeout'
+                    #
+                    #     # add new client to map
+                    #     clients[cid] = new_client_state
+                    #
+                    #     # notify all clients to add new client
+                    #     print 'notify all clients to add new client'
+                    #     for target_cid in clients:
+                    #         data_sent = pack(
+                    #             '<ciicii',
+                    #             '\x12',  # 1 == game package, 2 == game event
+                    #             get_current_millisecond_clamped(),
+                    #             cid,
+                    #             '\x00',  # event id == 0
+                    #             clients[cid].vid,
+                    #             clients[cid].spawn_slot
+                    #         )
+                    #         try:
+                    #             d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
+                    #             # print d_len, 'bytes sent'
+                    #         except socket.timeout, e:
+                    #             print 'send timeout'
+                    #
+                    # if not game_model.game_status == GAME_STATUS.RUNNING:
+                    #     # game start
+                    #     data_sent = pack(
+                    #         '<ciic',
+                    #         '\x12',
+                    #         get_current_millisecond_clamped(),
+                    #         0,
+                    #         '\x04'
+                    #     )
+                    #     broadcast_data(data_sent, sock_server, clients, [])
+                    #     # game_model.game_status = GAME_STATUS.RUNNING    # change game status
 
-                        # notify new client of existing clients
-                        print 'notify new client of existing clients'
-                        for existing_cid in clients:
-                            data_sent = pack(
-                                '<ciicii',
-                                '\x12',     # 1 == game package, 2 == game event
-                                get_current_millisecond_clamped(),
-                                existing_cid,
-                                '\x00',     # event id == 0
-                                clients[existing_cid].vid,
-                                clients[existing_cid].spawn_slot
-                            )
-                            try:
-                                d_len = sock_server.sendto(data_sent, new_client_state.addr)
-                                # print d_len, 'bytes sent'
-                            except socket.timeout, e:
-                                print 'send timeout'
+                    on_client_join_game(data, addr, cid, clients)
 
-                        # add new client to map
-                        clients[cid] = new_client_state
-
-                        # notify all clients to add new client
-                        print 'notify all clients to add new client'
-                        for target_cid in clients:
-                            data_sent = pack(
-                                '<ciicii',
-                                '\x12',  # 1 == game package, 2 == game event
-                                get_current_millisecond_clamped(),
-                                cid,
-                                '\x00',  # event id == 0
-                                clients[cid].vid,
-                                clients[cid].spawn_slot
-                            )
-                            try:
-                                d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
-                                # print d_len, 'bytes sent'
-                            except socket.timeout, e:
-                                print 'send timeout'
-
-                    if not game_model.game_status == GAME_STATUS.RUNNING:
-                        # game start
-                        data_sent = pack(
-                            '<ciic',
-                            '\x12',
-                            get_current_millisecond_clamped(),
-                            0,
-                            '\x04'
-                        )
-                        broadcast_data(data_sent, sock_server, clients, [])
-                        # game_model.game_status = GAME_STATUS.RUNNING    # change game status
                 elif event_id == '\x02':
                     # fire event
                     """
@@ -315,7 +388,7 @@ if __name__ == '__main__':
             data_sent = ''
             state_count = 0
             for cid in clients:
-                if clients[cid].need_update:
+                if True:  # clients[cid].need_update:
                     state_count += 1
                     pos = clients[cid].pos
                     rot = clients[cid].rot
@@ -332,16 +405,12 @@ if __name__ == '__main__':
             if state_count > 0:
                 data_sent = pack('<cii', '\x11', get_current_millisecond_clamped(), state_count) + data_sent
                 for target_cid in clients:
-                    try:
-                        d_len = sock_server.sendto(data_sent, clients[target_cid].addr)
-                        # print d_len, 'bytes sent'
-                    except Exception, e:
-                        pass
+                    send_data_to_client(data_sent, target_cid)
 
         # check connection timeout
-        if True:  # game_model.game_status == GAME_STATUS.RUNNING:
+        if False:  # game_model.game_status == GAME_STATUS.RUNNING:
             for cid in [ccid for ccid in clients]:
-                if time.time() - clients[cid].last_package_stamp > MAX_NO_RESPONSE:
+                if clients[cid].addr and time.time() - clients[cid].last_package_stamp > MAX_NO_RESPONSE:
                     print 'timeout. client', cid, 'connection closed'
                     clients.pop(cid, None)
                     if len(clients) == 0:
@@ -367,6 +436,26 @@ if __name__ == '__main__':
                 # end game
                 print 'end game'
                 game_model.game_status = GAME_STATUS.NOT_START
+            elif console_str == 'fake':
+                # spawn fake clients
+                for i in range(40):
+                    to_spawn_cid = i
+                    pack_data = pack(
+                        '<ciici',
+                        '\x12',
+                        get_current_millisecond_clamped(),
+                        to_spawn_cid,
+                        '\x00',
+                        1
+                    )
+                    on_client_join_game(pack_data, ('192.168.145.222', 1000 + i), to_spawn_cid, clients)
+                    time.sleep(1)
+            elif console_str == 'show_clients':
+                for cid in clients:
+                    if clients[cid].addr:
+                        print 'cid', cid
+                    else:
+                        print 'cid', cid, ', faked'
         except Queue.Empty, e:
             pass
 
