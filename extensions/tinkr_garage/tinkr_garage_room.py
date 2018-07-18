@@ -153,6 +153,7 @@ class TinkrGarageRoom(RoomServerBase):
 
     def __init__(self, gate_server_ref, room_id, server_name='tinkr_room'):
         RoomServerBase.__init__(self, gate_server_ref, room_id, server_name)
+        self.game_model = self.GameModel()
 
     def pack_client_state(self, cid):
         state = self.client_infos[cid].state
@@ -204,7 +205,11 @@ class TinkrGarageRoom(RoomServerBase):
 
             # init to-join client info
             self.client_infos[cid].state.vid = vid
-            self.client_infos[cid].state.spawn_slot = len(self.client_infos)
+            new_spawn_slot = len(self.client_infos)
+            if cid > 100:   # not AI
+                # TODO: remove this check
+                new_spawn_slot %= 8
+            self.client_infos[cid].state.spawn_slot = new_spawn_slot
 
             # notify new client of existing clients
             print 'notify new client of existing clients'
@@ -309,21 +314,18 @@ class TinkrGarageRoom(RoomServerBase):
         # update fake clients
         ai_ind = 0
         if ai_ind in self.client_infos:
-            int_sec = int(time.time())
-            if int_sec % 9 == 0:
-                self.client_infos[ai_ind].state.pos[0] = '\xa3'
-                self.client_infos[ai_ind].state.pos[1] = '\xa3'
-            elif int_sec % 6 == 0:
-                self.client_infos[ai_ind].state.pos[0] = '\xff'
-                self.client_infos[ai_ind].state.pos[1] = '\xff'
-            elif int_sec % 3 == 0:
-                self.client_infos[ai_ind].state.pos[0] = '\x33'
-                self.client_infos[ai_ind].state.pos[1] = '\x33'
-        # for cid in self.client_infos:
-        #     state = self.client_infos[cid].state
-        #     print 'client ', cid
-        #     print state.pos
-        #     print state.rot
+            # int_sec = int(time.time())
+            # if int_sec % 9 == 0:
+            #     self.client_infos[ai_ind].state.pos[0] = '\xa3'
+            #     self.client_infos[ai_ind].state.pos[1] = '\xa3'
+            # elif int_sec % 6 == 0:
+            #     self.client_infos[ai_ind].state.pos[0] = '\xff'
+            #     self.client_infos[ai_ind].state.pos[1] = '\xff'
+            # elif int_sec % 3 == 0:
+            #     self.client_infos[ai_ind].state.pos[0] = '\x33'
+            #     self.client_infos[ai_ind].state.pos[1] = '\x33'
+            self.client_infos[ai_ind].state.grid_x = '\x21'
+            self.client_infos[ai_ind].state.pos[2] = 3000
         pass
 
     @on_command('spawn_fake_clients')
@@ -341,11 +343,11 @@ class TinkrGarageRoom(RoomServerBase):
                 self.client_infos[to_spawn_cid].state.is_faked = True
                 # ['\xa0', '\xa0', 2200]
                 self.client_infos[to_spawn_cid].state.pos[2] += n * 50
-                pos_x = self.client_infos[to_spawn_cid].state.pos[0]
-                pos_x = unpack('<h', pos_x + '\x00')[0]
-                pos_x += n * 2
-                pos_x = pack('<h', pos_x)[0]
-                self.client_infos[to_spawn_cid].state.pos[0] = pos_x
+                grid_x = self.client_infos[to_spawn_cid].state.grid_x
+                grid_x = unpack('<h', grid_x + '\x00')[0]
+                grid_x += n
+                grid_x = pack('<h', grid_x)[0]
+                self.client_infos[to_spawn_cid].state.grid_x = grid_x
                 # if n == 0:
                 #     self.client_infos[to_spawn_cid].state.pos[0] = '\xaa'
                 #     self.client_infos[to_spawn_cid].state.grid_x = '\x16'

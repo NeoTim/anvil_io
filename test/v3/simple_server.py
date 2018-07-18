@@ -99,8 +99,12 @@ def on_client_join_game(data, addr, cid, clients):
         else:
             # AI has no addr
             new_client_state.addr = None
+
         new_client_state.vid = vid
         new_client_state.spawn_slot = len(clients)  # cur_spawn_slot
+        if cid < 100:
+            # AI pos
+            new_client_state.grid_x = pack('<h', unpack('<h', '\x15\x00')[0] + cid)[0]
         # cur_spawn_slot += 1
 
         # add new client to map
@@ -388,6 +392,10 @@ if __name__ == '__main__':
             data_sent = ''
             state_count = 0
             for cid in clients:
+                # testing condition for partial sync state
+                if state_count > 20:
+                    # break
+                    pass
                 if True:  # clients[cid].need_update:
                     state_count += 1
                     pos = clients[cid].pos
@@ -449,7 +457,6 @@ if __name__ == '__main__':
                         1
                     )
                     on_client_join_game(pack_data, ('192.168.145.222', 1000 + i), to_spawn_cid, clients)
-                    time.sleep(1)
             elif console_str == 'show_clients':
                 for cid in clients:
                     if clients[cid].addr:

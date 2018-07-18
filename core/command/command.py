@@ -1,6 +1,10 @@
+import time
+
+
 class Command:
     def __init__(self, command_name, *args, **kwargs):
         self.command_name = command_name
+        self.command_triggered_time = time.time()
         self.args = args
         self.kwargs = kwargs
 

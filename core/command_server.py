@@ -2,6 +2,7 @@ from command.command import Command
 from functools import wraps
 import threading
 import Queue
+import time
 
 SERVER_COMMAND_FUNCS = {}   # command register
 
@@ -57,16 +58,19 @@ class CommandServer:
 
     def tick_command(self):
         try:
-            cmd = self.command_q.get(block=False)
-            if cmd:
-                if cmd.command_name not in self.COMMAND_FUNCS:
-                    print 'command \'' + cmd.command_name + '\' not found'
-                else:
-                    try:
-                        # TODO: verify arguments
-                        self.COMMAND_FUNCS[cmd.command_name](*cmd.args, **cmd.kwargs)
-                    except Exception, e:
-                        print e
+            while not self.command_q.empty():
+                cmd = self.command_q.get(timeout=0.01)
+                if cmd:
+                    if cmd.command_name not in self.COMMAND_FUNCS:
+                        print 'command \'' + cmd.command_name + '\' not found'
+                    else:
+                        try:
+                            # TODO: verify arguments
+                            self.COMMAND_FUNCS[cmd.command_name](*cmd.args, **cmd.kwargs)
+                            # print cmd.command_name, 'execute delay:', time.time() - cmd.command_triggered_time
+                        except Exception, e:
+                            print e
+                self.command_q.task_done()
         except Queue.Empty, e:
             pass
 

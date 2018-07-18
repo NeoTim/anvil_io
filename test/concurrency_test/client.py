@@ -4,8 +4,14 @@ from threading import Thread
 import time
 from struct import *
 
-SERVER_IP = '10.123.160.189'
+SERVER_IP = '10.123.163.239'
 SERVER_GATE_PORT = 10000
+
+
+def get_current_millisecond_clamped():
+    cur_stamp = time.time()
+    cur_ms = int(cur_stamp * 1000) % 604800000
+    return cur_ms
 
 
 class ClientState:
@@ -26,9 +32,9 @@ def socket_recv_data(sock):
 def socket_send_data(sock, data, addr):
     try:
         d_len = sock.sendto(data, addr)
+        # print d_len, ' sent'
         return d_len
     except Exception, e:
-        print 'send error'
         return 0
 
 
@@ -46,9 +52,13 @@ class ClientProcess(Process):
         self.state = ClientState()
         self.running_state = self.RunningState.NOT_LOGGED_IN
         self.com_addr = [SERVER_IP, 0]
+        self.time_to_live = 10  # in seconds
+        self.start_time = 0
 
     def run(self):
         print self.name, 'starts'
+        # record start time
+        self.start_time = time.time()
         package_count = 0
         lag_total = 0
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -56,9 +66,12 @@ class ClientProcess(Process):
         sock.bind(('0.0.0.0', 5000 + self.cid))
         try:
             while True:
+                if time.time() - self.start_time > self.time_to_live:
+                    print 'client times up.'
+                    break
                 data, addr = socket_recv_data(sock)
                 """
-                header of recv package:
+                header of server (recv) package:
                 | op_code | stamp |
                      1        4
                 login_success:
@@ -72,7 +85,7 @@ class ClientProcess(Process):
                 | \x03 | ... | state_count | state_data |
                                    4        (4 + 6) * n
                 
-                header of send package:
+                header of client (send) package:
                 | op_code | stamp | cid |
                      1        4      4
                 login_request:
@@ -82,11 +95,11 @@ class ClientProcess(Process):
                                    6
                 """
                 if data:
-                    op_code = unpack('<c', data)[0]
+                    op_code = unpack('<c', data[0])[0]
                     stamp = unpack('<i', data[1:5])[0]
 
                     # stat of network
-                    lag_total += (time.time() * 1000 % 1000000000 - stamp)
+                    lag_total += get_current_millisecond_clamped() - stamp
                     package_count += 1
 
                     if self.running_state == self.RunningState.NOT_LOGGED_IN:
@@ -94,6 +107,7 @@ class ClientProcess(Process):
                             print self.name, 'logged in'
                             self.running_state = self.RunningState.LOGGED_IN
                             com_port = unpack('<i', data[5:9])[0]
+                            print com_port
                             self.com_addr[1] = com_port
                     if self.running_state == self.RunningState.LOGGED_IN:
                         if op_code == '\x01':
@@ -117,11 +131,14 @@ class ClientProcess(Process):
                     )
         finally:
             print self.name, 'ends'
-            print 'average lag:', lag_total / package_count
+            if package_count == 0:
+                print 'average lag: infinite'
+            else:
+                print 'average lag:', lag_total / package_count
 
 
 def main():
-    for i in range(5):
+    for i in range(10):
         p = ClientProcess(i)
         p.start()
         # p.join()

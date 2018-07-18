@@ -201,17 +201,24 @@ class GameEventManager:
         gate_server_ref = self.room_server_ref.gate_server_ref
         gate_server_ref.run_command(
             'send_package',
-            to_cid,
+            [to_cid],
             data_to_send,
             '\x12'
         )
 
     def broadcast_server_event(self, evt, exclude=list()):
         """ broadcast server event to clients """
-        # TODO: with event buffer
+        target_cids = []
         for target_cid in self.room_server_ref.client_infos:
             if target_cid not in exclude:
-                self.send_server_event(target_cid, evt)
+                target_cids.append(target_cid)
+        data_to_send = pack('<ic', evt.from_cid, evt.event_id) + evt.pack()
+        self.room_server_ref.gate_server_ref.run_command(
+            'send_package',
+            target_cids,
+            data_to_send,
+            '\x12'
+        )
         pass
 
     def handle_event(self, evt):
@@ -299,21 +306,27 @@ class RoomServerBase(CommandServer):
                 client_state_count = 0
                 data_to_send = ''
                 for cid in self.client_infos:
+                    if client_state_count > 50:
+                        # TODO: remove this check
+                        break
                     data_to_send += pack('<i', cid) + self.pack_client_state(cid)
                     client_state_count += 1
                 data_to_send = pack('<i', client_state_count) + data_to_send
                 if client_state_count > 0:
                     # broadcast client states
+                    target_cids = []
                     for target_cid in self.client_infos:
                         if self.client_infos[target_cid].state.is_faked:
                             # print 'no data sent to AI'
-                            continue
-                        self.gate_server_ref.run_command(
-                            'send_package',
-                            target_cid,
-                            data_to_send,
-                            '\x11'
-                        )
+                            # continue
+                            pass
+                        target_cids.append(target_cid)
+                    self.gate_server_ref.run_command(
+                        'send_package',
+                        target_cids,
+                        data_to_send,
+                        '\x11'
+                    )
         except Exception, e:
             print e
             print 'sync states error'
@@ -380,8 +393,9 @@ class RoomServerBase(CommandServer):
         # solve and clear the game event queue
         try:
             while not self.game_event_manager.game_event_q.empty():
-                evt = self.game_event_manager.game_event_q.get(block=False)
+                evt = self.game_event_manager.game_event_q.get(timeout=0.01)
                 self.game_event_manager.handle_event(evt)
+                self.game_event_manager.game_event_q.task_done()
         except Exception, e:
             print e
 

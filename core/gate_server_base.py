@@ -103,27 +103,28 @@ class GateServerBase(CommandServer):
             print 'client', cid, 'not logged in. quit room failed'
 
     @on_command('send_package')
-    def send_package(self, to_cid, pkg_data, op_code):
+    def send_package(self, to_cids, pkg_data, op_code):
         """
         send package to to_cid client
         header:
             | op_code | seq |
                  1       4
-        :param to_cid:
+        :param to_cids:
         :param pkg_data:
         :param op_code:
         :return:
         """
-        if to_cid in self.client_connections:
-            remote_ip = self.client_connections[to_cid].remote_ip
-            remote_port = self.client_connections[to_cid].remote_port
-            # add header
-            pkg_data = pack('<ci', op_code, tkutil.get_current_millisecond_clamped()) + pkg_data
-            d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
-            print d_len, 'bytes sent to', remote_ip, remote_port
-        else:
-            # print 'client', to_cid, 'not connected. no data sent'
-            pass
+        # add op_code and time stamp
+        pkg_data = pack('<ci', op_code, tkutil.get_current_millisecond_clamped()) + pkg_data
+        for to_cid in to_cids:
+            if to_cid in self.client_connections:
+                remote_ip = self.client_connections[to_cid].remote_ip
+                remote_port = self.client_connections[to_cid].remote_port
+                d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
+                print d_len, 'bytes sent to', remote_ip, remote_port
+            else:
+                # print 'client', to_cid, 'not connected. no data sent'
+                pass
 
     def parse_token(self, pkg_data):
         # TODO: should be overwritten. return the client token from the package data
@@ -187,6 +188,10 @@ class GateServerBase(CommandServer):
                 self.quit_room(cid)
                 self.logout_client(cid)
 
+    def command_loop(self):
+        while True:
+            self.tick_command()
+
     def loop(self):
         try:
             while True:
@@ -221,10 +226,10 @@ if __name__ == '__main__':
     gs.start_server()
 
     # spawn fake clients
-    round = 0
+    round = 1
     while round == 0:
         if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
-            time.sleep(5)
+            time.sleep(15)
             gs.room_servers[0].run_command('spawn_fake_clients', 1)
             round += 1
     print 'done'
