@@ -150,6 +150,25 @@ class GateServerBase(CommandServer):
                 op_code = unpack('<c', data[0])[0]
                 # int_op_code = tkutil.get_int_from_byte(op_code)
                 target_cid = unpack('<i', data[5:5+4])[0]
+
+                # TESTING !!
+                if op_code == '\x12':
+                    eid = unpack('<c', data[9:10])[0]
+                    if eid == '\x06':
+                        print 'ping event'
+                        ping_start = unpack('<i', data[1:5])[0]
+                        pkg_data = pack(
+                            '<ciici',
+                            '\x12',
+                            tkutil.get_current_millisecond_clamped(),
+                            target_cid,
+                            '\x08',
+                            ping_start
+                        )
+                        dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
+                        print dlen, 'sent'
+                        return
+
                 if op_code <= '\x0f':  # admin package
                     if op_code == '\x01':   # login
                         token = self.parse_token(data)
@@ -226,7 +245,7 @@ if __name__ == '__main__':
     gs.start_server()
 
     # spawn fake clients
-    round = 1
+    round = 0
     while round == 0:
         if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
             time.sleep(15)

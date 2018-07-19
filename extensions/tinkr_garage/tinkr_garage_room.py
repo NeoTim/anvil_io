@@ -131,7 +131,9 @@ class EventServerEquipWeapon(ServerGameEvent):
 @app_server_game_event
 class EventServerEchoPing(ServerGameEvent):
     event_id = '\x08'
-    var_struct = []
+    var_struct = [
+        ('ping_start_stamp', 'i')
+    ]
 
 
 class TinkrGarageRoom(RoomServerBase):
@@ -146,6 +148,7 @@ class TinkrGarageRoom(RoomServerBase):
             self.HP = 100
             self.spawn_slot = 0
             self.is_faked = False   # if a client is AI
+            self.last_state_stamp = 0   # time stamp of last state update
 
     class GameModel:
         def __init__(self):
@@ -164,13 +167,15 @@ class TinkrGarageRoom(RoomServerBase):
         # print state.pos[2]
         return pack('<cccchccc', state.grid_x, state.grid_y, state.pos[0], state.pos[1], state.pos[2], state.rot[0], state.rot[1], state.rot[2])
 
-    def unpack_client_state(self, state_data):
+    def unpack_client_state(self, pkg_data):
         """
         NOTE: not specified parameters will be overwritten with default values
-        :param state_data:
+        :param pkg_data:
         :return:
         """
         state = self.ClientState()
+        seq = unpack('<i', pkg_data[1:5])[0]
+        state_data = pkg_data[9:]
         (grid_x, grid_y, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) = unpack('<cccchccc', state_data)
         state.grid_x = grid_x
         state.grid_y = grid_y
@@ -180,13 +185,18 @@ class TinkrGarageRoom(RoomServerBase):
         state.rot[0] = rot_x
         state.rot[1] = rot_y
         state.rot[2] = rot_z
+        state.last_state_stamp = seq
         return state
 
     def update_client_state(self, cid, new_state):
-        self.client_infos[cid].state.grid_x = new_state.grid_x
-        self.client_infos[cid].state.grid_y = new_state.grid_y
-        self.client_infos[cid].state.pos = new_state.pos
-        self.client_infos[cid].state.rot = new_state.rot
+        if cid in self.client_infos and new_state.last_state_stamp > self.client_infos[cid].state.last_state_stamp:
+            self.client_infos[cid].state.grid_x = new_state.grid_x
+            self.client_infos[cid].state.grid_y = new_state.grid_y
+            self.client_infos[cid].state.pos = new_state.pos
+            self.client_infos[cid].state.rot = new_state.rot
+            self.client_infos[cid].state.last_state_stamp = new_state.last_state_stamp
+        else:
+            print 'old state:', new_state.last_state_stamp, ', not update'
 
     @on_client_game_event(EventClientJoinGame)
     def on_client_join_game(self, evt):
@@ -307,7 +317,9 @@ class TinkrGarageRoom(RoomServerBase):
 
     @on_client_game_event(EventClientPing)
     def on_client_ping(self, evt):
-        echo_evt = EventServerEchoPing
+        echo_evt = EventServerEchoPing()
+        echo_evt.from_cid = evt.from_cid
+        echo_evt.var['ping_start_stamp'] = evt.time_stamp
         self.game_event_manager.send_server_event(evt.from_cid, echo_evt)
 
     def tick_extra(self):

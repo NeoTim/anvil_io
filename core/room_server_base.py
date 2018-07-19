@@ -173,7 +173,7 @@ class ClientGameEvent(GameEvent):
 
     def __init__(self):
         GameEvent.__init__(self)
-        self.from_cid = None
+        self.from_cid = None    # TODO: better with exception check
 
 
 class ServerGameEvent(GameEvent):
@@ -289,7 +289,7 @@ class RoomServerBase(CommandServer):
     def pack_client_state(self, cid):
         raise NotImplementedError
 
-    def unpack_client_state(self, state_data):
+    def unpack_client_state(self, pkg_data):
         raise NotImplementedError
 
     def tick_client_state_sync(self):
@@ -338,8 +338,9 @@ class RoomServerBase(CommandServer):
 
     def handle_client_state_package(self, pkg):
         """ | op_code | seq | cid | state """
-        (op_code, seq, cid) = unpack('<cii', pkg.data[0:9])
-        new_state = self.unpack_client_state(pkg.data[9:])
+        # (op_code, seq, cid) = unpack('<cii', pkg.data[0:9])
+        cid = unpack('<i', pkg.data[5:9])[0]
+        new_state = self.unpack_client_state(pkg.data)
         # update client state
         self.update_client_state(cid, new_state)
 
