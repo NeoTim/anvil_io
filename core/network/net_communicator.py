@@ -46,6 +46,8 @@ class NetCommunicator:
                 d_len = self.sock.sendto(msg, (remote_addr, remote_port))
             except socket.timeout, e:
                 print 'time out'
+            except Exception, e:
+                print 'send error', e
         return d_len
 
     def receive_data(self):

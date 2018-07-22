@@ -200,6 +200,7 @@ class GateServerBase(CommandServer):
                 print 'unknown package'
 
     def tick_connection_check(self):
+        return
         # detect if the client connection is timed out
         for cid in [ccid for ccid in self.client_connections]:
             if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
@@ -245,7 +246,7 @@ if __name__ == '__main__':
     gs.start_server()
 
     # spawn fake clients
-    round = 0
+    round = 1
     while round == 0:
         if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
             time.sleep(15)

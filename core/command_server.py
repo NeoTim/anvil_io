@@ -41,7 +41,7 @@ class CommandServer:
     COMMAND_FUNCS = SERVER_COMMAND_FUNCS
 
     def __init__(self, server_name='command_server'):
-        self.command_q = Queue.Queue()
+        self.command_q = Queue.Queue(5000)
         self.server_thread = None
         self.server_name = server_name
 

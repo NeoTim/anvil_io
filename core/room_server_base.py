@@ -193,7 +193,7 @@ class GameEventManager:
 
     def __init__(self, room_server_ref):
         self.room_server_ref = room_server_ref
-        self.game_event_q = Queue.Queue()
+        self.game_event_q = Queue.Queue(5000)
 
     def send_server_event(self, to_cid, evt):
         """ raise server event to client """
