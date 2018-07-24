@@ -121,6 +121,8 @@ class GateServerBase(CommandServer):
                 remote_ip = self.client_connections[to_cid].remote_ip
                 remote_port = self.client_connections[to_cid].remote_port
                 d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
+                if d_len == 22:  # TESTING
+                    continue
                 print d_len, 'bytes sent to', remote_ip, remote_port
             else:
                 # print 'client', to_cid, 'not connected. no data sent'
@@ -200,7 +202,6 @@ class GateServerBase(CommandServer):
                 print 'unknown package'
 
     def tick_connection_check(self):
-        return
         # detect if the client connection is timed out
         for cid in [ccid for ccid in self.client_connections]:
             if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:

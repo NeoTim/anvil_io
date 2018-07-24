@@ -179,16 +179,18 @@ class TinkrGarageRoom(RoomServerBase):
         def __init__(self):
             self.cur_storm_center = [0, 0]
             self.cur_storm_radius = 18000
-            self.cur_storm_duration = 30  # secs
+            self.cur_storm_duration = 15  # secs
             self.last_storm_update_stamp = 0  # last stamp of storm update
             self.storm_shrink_start_stamp = -1  # stamp <= 0 means not shrinking
             self.storm_shrink_delay = 5  # secs, count down before shrink happened
             self.storm_shrink_duration = 5  # secs, define the shrink speed
 
+            self.storm_pkg_count = 0
+
             self.prev_storm_center = [0, 0]
             self.prev_storm_radius = 18000
             self.next_storm_center = [0, 0]
-            self.next_storm_radius = 17000
+            self.next_storm_radius = 18000
 
             self.last_storm_damage_stamp = time.time()
 
@@ -394,7 +396,7 @@ class TinkrGarageRoom(RoomServerBase):
             self.client_infos[ai_ind].state.grid_x = '\x21'
             self.client_infos[ai_ind].state.pos[2] = 3000
 
-        return
+        # return
 
         # calculate shrinking storm
         if self.game_model.storm_shrink_start_stamp > 0:
@@ -403,6 +405,7 @@ class TinkrGarageRoom(RoomServerBase):
                 self.game_model.cur_storm_center = self.game_model.next_storm_center
                 self.game_model.cur_storm_radius = self.game_model.next_storm_radius
                 self.game_model.storm_shrink_start_stamp = -1
+                print 'shrinking done. current radius', self.game_model.cur_storm_radius
             else:
                 alpha = shrink_time / self.game_model.storm_shrink_duration
                 for i in range(len(self.game_model.cur_storm_center)):
@@ -417,7 +420,7 @@ class TinkrGarageRoom(RoomServerBase):
 
             # SHOULD BE cur_storm_center
             cur_center_xy = self.game_model.grid_xy_to_true(21, 51, 160, 160)
-            print 'current storm center', cur_center_xy
+            # print 'current storm center', cur_center_xy
 
             for cid in self.client_infos:
                 if self.client_infos[cid].state.HP > 0:
@@ -428,12 +431,12 @@ class TinkrGarageRoom(RoomServerBase):
                         unpack('<h', self.client_infos[cid].state.pos[0] + '\x00')[0],
                         unpack('<h', self.client_infos[cid].state.pos[1] + '\x00')[0]
                     )
-                    print 'client pos', client_xy
+                    # print 'client pos', client_xy
                     dx = client_xy[0] - cur_center_xy[0]
                     dy = client_xy[1] - cur_center_xy[1]
                     if dx * dx + dy * dy > self.game_model.cur_storm_radius * self.game_model.cur_storm_radius:
                         damage = 10000
-                        print 'storm damage', damage
+                        # print 'storm damage', damage
                         self.client_infos[cid].state.HP -= damage / 10000
                         evt_damage = EventServerDamage()
                         evt_damage.from_cid = cid   # damaged client
@@ -442,16 +445,22 @@ class TinkrGarageRoom(RoomServerBase):
                         self.game_event_manager.broadcast_server_event(evt_damage)
 
         # update sand storm
-        if time.time() - self.game_model.last_storm_update_stamp > 15:  # self.game_model.cur_storm_duration:
+        storm_span = self.game_model.cur_storm_duration
+        if self.game_model.storm_pkg_count > 1:   # if not first update, accumulate shrink delay and shrink time
+            storm_span = self.game_model.cur_storm_duration + self.game_model.storm_shrink_delay + self.game_model.storm_shrink_duration
+        if time.time() - self.game_model.last_storm_update_stamp > storm_span:
 
             if time.time() - self.start_stamp < 10:  # TESTING
                 return
 
-            print 'storm update'
+            # counter update
+            self.game_model.storm_pkg_count += 1
+
+            print 'storm update at time', time.time()
             self.game_model.last_storm_update_stamp = time.time()
 
             # calculate next storm
-            self.game_model.cur_storm_radius = self.game_model.next_storm_radius
+            # self.game_model.cur_storm_radius = self.game_model.next_storm_radius
             self.game_model.next_storm_radius -= 1000
             if self.game_model.next_storm_radius < 1000:
                 self.game_model.next_storm_radius = 1000
@@ -460,20 +469,27 @@ class TinkrGarageRoom(RoomServerBase):
             for i in range(len(self.game_model.cur_storm_center)):
                 self.game_model.prev_storm_center[i] = self.game_model.cur_storm_center[i]
             self.game_model.prev_storm_radius = self.game_model.cur_storm_radius
-            # set shrink start stamp, otherwise the shrink won't start
-            self.game_model.storm_shrink_start_stamp = time.time() + self.game_model.storm_shrink_delay
 
             # send update event
             evt_storm_update = EventServerUpdateSandStorm()
             evt_storm_update.from_cid = -1
             # TESTING
             evt_storm_update.var['cur_center'] = ['\x15', '\x33', '\xa0', '\xa0']  # self.game_model.cur_storm_center
-            evt_storm_update.var['cur_radius'] = self.game_model.cur_storm_radius
-            shrink_speed = float(self.game_model.cur_storm_radius - self.game_model.next_storm_radius) / self.game_model.storm_shrink_duration
+            evt_storm_update.var['cur_radius'] = self.game_model.next_storm_radius  # ACTUALLY NEXT STORM INFO
+            shrink_speed = float(
+                self.game_model.cur_storm_radius - self.game_model.next_storm_radius) / self.game_model.storm_shrink_duration
             evt_storm_update.var['shrink_speed'] = int(shrink_speed)
             evt_storm_update.var['time_to_appear_next'] = self.game_model.cur_storm_duration
             evt_storm_update.var['time_to_shrink'] = self.game_model.storm_shrink_delay
             self.game_event_manager.broadcast_server_event(evt_storm_update)
+
+            # set shrink start stamp, otherwise the shrink won't start
+            if self.game_model.storm_pkg_count > 1:  # IF NOT FIRST PACKAGE
+                self.game_model.storm_shrink_start_stamp = time.time() + self.game_model.storm_shrink_delay
+
+            # print 'storm radius:', self.game_model.cur_storm_radius
+            # print 'time until next storm:', self.game_model.cur_storm_duration
+            # print 'shrink duration:', self.game_model.storm_shrink_duration
 
         pass
 

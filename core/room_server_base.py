@@ -213,6 +213,8 @@ class GameEventManager:
             if target_cid not in exclude:
                 target_cids.append(target_cid)
         data_to_send = pack('<ic', evt.from_cid, evt.event_id) + evt.pack()
+        if evt.event_id == '\x09':
+            print 'radius sent:', unpack('<i', data_to_send[9:13])[0]   # TESTING
         self.room_server_ref.gate_server_ref.run_command(
             'send_package',
             target_cids,
