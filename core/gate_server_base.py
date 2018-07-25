@@ -11,7 +11,7 @@ class ClientConnection:
     """
     client connection model
     """
-    MAX_NO_RESPONSE = 10    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 30    # max seconds with no response from client before disconnect it
 
     def __init__(self, r_ip, r_port, sock_c=None):
         self.sock_c = sock_c
@@ -24,6 +24,8 @@ class ClientConnection:
 
 class GateServerBase(CommandServer):
 
+    CONNECTION_CHECK_INTERVAL = 5   # check connection every 5 secs
+
     def __init__(self, room_server_class, bind_addr=('0.0.0.0', 10000), server_name='gate_server'):
         CommandServer.__init__(self, server_name)
         self.client_connections = {}    # TODO: this dict might need to be synchronized among threads
@@ -35,6 +37,11 @@ class GateServerBase(CommandServer):
         self.bind_addr = bind_addr
         self.net_communicator = NetCommunicator(sock=sock, time_out=0.01)
 
+        self.last_connection_check_stamp = time.time()
+
+    def post_login_client(self, cid):
+        pass
+
     def login_client(self, cid, token, remote_ip, remote_port):
         if cid not in self.client_connections:
             login_success = True    # TODO: the login state should be returned by login server
@@ -42,13 +49,18 @@ class GateServerBase(CommandServer):
                 new_connection = ClientConnection(remote_ip, remote_port)
                 self.client_connections[cid] = new_connection
                 print 'client', cid, 'login success'
+                self.post_login_client(cid)  # after login action
             else:
                 print 'client', cid, 'info not correct. login failed'
         else:
             print 'client', cid, 'already logged in'
 
+    def pre_logout_client(self, cid):
+        pass
+
     @on_command('logout_client')
     def logout_client(self, cid):
+        self.pre_logout_client(cid)  # before logout actions
         if cid in self.client_connections:
             at_room = self.client_connections[cid].at_room
             if at_room >= 0:
@@ -132,6 +144,56 @@ class GateServerBase(CommandServer):
         # TODO: should be overwritten. return the client token from the package data
         return ''
 
+    def solve_package(self, pkg):
+        data = pkg.data
+        addr = (pkg.ip, pkg.port)
+        op_code = unpack('<c', data[0])[0]
+        # int_op_code = tkutil.get_int_from_byte(op_code)
+        target_cid = unpack('<i', data[5:5 + 4])[0]
+
+        if op_code <= '\x0f':  # admin package
+            if op_code == '\x01':  # login
+                token = self.parse_token(data)
+                self.login_client(target_cid, token, addr[0], addr[1])
+            elif op_code == '\x02':  # logout
+                self.logout_client(target_cid)
+        elif op_code <= '\x1f':  # game package
+
+            # TODO: move login handling to admin package
+            if op_code == '\x12':
+                event_id = unpack('<c', data[9:10])[0]
+                if event_id == '\x00':
+                    print 'login event'
+                    token = self.parse_token(data)
+                    self.login_client(target_cid, token, addr[0], addr[1])
+
+                    # TODO: move join room to separate package
+                    print 'join room event'
+                    self.assign_room(target_cid, pkg)
+
+                elif event_id == '\x06':
+                    print 'ping event'
+                    ping_start = unpack('<i', data[1:5])[0]
+                    pkg_data = pack(
+                        '<ciici',
+                        '\x12',
+                        tkutil.get_current_millisecond_clamped(),
+                        target_cid,
+                        '\x08',
+                        ping_start
+                    )
+                    dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
+                    print dlen, 'sent'
+                    return
+
+            if target_cid in self.client_connections:
+                at_room = self.client_connections[target_cid].at_room
+                if at_room >= 0:
+                    self.room_servers[at_room].run_command('handle_package', pkg)
+
+        elif op_code <= '\x2f':  # sys info package
+            pass
+
     def tick_package(self):
         """
         tick function to process incoming packages
@@ -149,69 +211,69 @@ class GateServerBase(CommandServer):
                 self.client_connections[target_cid].last_package_time = time.time()
         if pkg:
             try:
-                op_code = unpack('<c', data[0])[0]
-                # int_op_code = tkutil.get_int_from_byte(op_code)
-                target_cid = unpack('<i', data[5:5+4])[0]
-
-                # TESTING !!
-                if op_code == '\x12':
-                    eid = unpack('<c', data[9:10])[0]
-                    if eid == '\x06':
-                        print 'ping event'
-                        ping_start = unpack('<i', data[1:5])[0]
-                        pkg_data = pack(
-                            '<ciici',
-                            '\x12',
-                            tkutil.get_current_millisecond_clamped(),
-                            target_cid,
-                            '\x08',
-                            ping_start
-                        )
-                        dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                        print dlen, 'sent'
-                        return
-
-                if op_code <= '\x0f':  # admin package
-                    if op_code == '\x01':   # login
-                        token = self.parse_token(data)
-                        self.login_client(target_cid, token, addr[0], addr[1])
-                    elif op_code == '\x02':  # logout
-                        self.logout_client(target_cid)
-                elif op_code <= '\x1f':  # game package
-
-                    # TODO: move login handling to admin package
-                    if op_code == '\x12':
-                        event_id = unpack('<c', data[9:10])[0]
-                        if event_id == '\x00':
-                            print 'login event'
-                            token = self.parse_token(data)
-                            self.login_client(target_cid, token, addr[0], addr[1])
-
-                            # TODO: move join room to separate package
-                            print 'join room event'
-                            self.assign_room(target_cid, pkg)
-
-                    if target_cid in self.client_connections:
-                        at_room = self.client_connections[target_cid].at_room
-                        if at_room >= 0:
-                            self.room_servers[at_room].run_command('handle_package', pkg)
-                elif op_code <= '\x2f':  # sys info package
-                    pass
+                # op_code = unpack('<c', data[0])[0]
+                # # int_op_code = tkutil.get_int_from_byte(op_code)
+                # target_cid = unpack('<i', data[5:5+4])[0]
+                #
+                # # TESTING !!
+                # if op_code == '\x12':
+                #     eid = unpack('<c', data[9:10])[0]
+                #     if eid == '\x06':
+                #         print 'ping event'
+                #         ping_start = unpack('<i', data[1:5])[0]
+                #         pkg_data = pack(
+                #             '<ciici',
+                #             '\x12',
+                #             tkutil.get_current_millisecond_clamped(),
+                #             target_cid,
+                #             '\x08',
+                #             ping_start
+                #         )
+                #         dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
+                #         print dlen, 'sent'
+                #         return
+                #
+                # if op_code <= '\x0f':  # admin package
+                #     if op_code == '\x01':   # login
+                #         token = self.parse_token(data)
+                #         self.login_client(target_cid, token, addr[0], addr[1])
+                #     elif op_code == '\x02':  # logout
+                #         self.logout_client(target_cid)
+                # elif op_code <= '\x1f':  # game package
+                #
+                #     # TODO: move login handling to admin package
+                #     if op_code == '\x12':
+                #         event_id = unpack('<c', data[9:10])[0]
+                #         if event_id == '\x00':
+                #             print 'login event'
+                #             token = self.parse_token(data)
+                #             self.login_client(target_cid, token, addr[0], addr[1])
+                #
+                #             # TODO: move join room to separate package
+                #             print 'join room event'
+                #             self.assign_room(target_cid, pkg)
+                #
+                #     if target_cid in self.client_connections:
+                #         at_room = self.client_connections[target_cid].at_room
+                #         if at_room >= 0:
+                #             self.room_servers[at_room].run_command('handle_package', pkg)
+                # elif op_code <= '\x2f':  # sys info package
+                #     pass
+                self.solve_package(pkg)
+                pass
             except KeyError, e:
                 print e
                 print 'unknown package'
 
     def tick_connection_check(self):
-        # detect if the client connection is timed out
-        for cid in [ccid for ccid in self.client_connections]:
-            if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
-                print 'timeout. client', cid, 'connection closed'
-                self.quit_room(cid)
-                self.logout_client(cid)
-
-    def command_loop(self):
-        while True:
-            self.tick_command()
+        if time.time() - self.last_connection_check_stamp > self.CONNECTION_CHECK_INTERVAL:
+            self.last_connection_check_stamp = time.time()
+            # detect if the client connection is timed out
+            for cid in [ccid for ccid in self.client_connections]:
+                if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
+                    print 'timeout. client', cid, 'connection closed'
+                    self.quit_room(cid)
+                    self.logout_client(cid)
 
     def loop(self):
         try:
