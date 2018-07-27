@@ -78,7 +78,7 @@ class TinkrGateServer(GateServerBase):
                     print 'join room event'
                     self.assign_room(target_cid, pkg)
 
-            # pass to room if necessary
+            # pass to room if necessary (game event)
             if target_cid in self.client_connections:
                 at_room = self.client_connections[target_cid].at_room
                 if at_room >= 0:
@@ -90,7 +90,14 @@ class TinkrGateServer(GateServerBase):
 if __name__ == '__main__':
 
     from tinkr_garage_room import TinkrGarageRoom
+    import time
 
     rs_class = TinkrGarageRoom
     gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
+
+    gs.create_room(666)
+    gs.room_servers[666].run_command('set_storm_enabling', 0)
+
+    time.sleep(0.5)
+
     gs.start_server()

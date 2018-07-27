@@ -270,7 +270,7 @@ class RoomServerBase(CommandServer):
         self.client_infos = {}     # current client states. client id => client info
         self.game_event_manager = GameEventManager(self)
 
-    def post_add_client(self):
+    def post_add_client(self, cid):
         pass
 
     @on_command('add_client')
@@ -280,11 +280,11 @@ class RoomServerBase(CommandServer):
             new_client_info = self.ClientInfo(new_client_state)
             self.client_infos[cid] = new_client_info
             print 'client', cid, 'entered room', self.room_id
-            self.post_add_client()      # TESTING
+            self.post_add_client(cid)      # TESTING
         else:
             print 'client', cid, 'already in room', self.room_id
 
-    def post_remove_client(self):
+    def post_remove_client(self, cid):
         pass
 
     @on_command('remove_client')
@@ -293,7 +293,7 @@ class RoomServerBase(CommandServer):
             self.client_infos.pop(cid, None)
             print 'client', cid, 'leaves room', self.room_id
             # TESTING
-            self.post_remove_client()
+            self.post_remove_client(cid)
         else:
             print 'client', cid, 'not in room', self.room_id, '. no client removed from room'
 

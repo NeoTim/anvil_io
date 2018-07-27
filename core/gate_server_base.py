@@ -84,10 +84,10 @@ class GateServerBase(CommandServer):
 
     def assign_room(self, cid, pkg, rid=-1):
         room_id = 0     # always 0 for now
-        if rid >= 0:
+        if rid >= 0:    # if room id specified, use it
             room_id = rid
         target_room = None
-        if room_id not in self.room_servers:
+        if room_id not in self.room_servers:        # create room if not exists
             target_room = self.create_room(room_id)
         else:
             target_room = self.room_servers[room_id]
@@ -103,6 +103,7 @@ class GateServerBase(CommandServer):
                 target_room.run_command('add_client', cid)
                 self.client_connections[cid].at_room = room_id
 
+    @on_command('quit_room')
     def quit_room(self, cid):
         if cid in self.client_connections:
             at_room = self.client_connections[cid].at_room
