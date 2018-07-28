@@ -59,7 +59,7 @@ class CommandServer:
     def tick_command(self):
         try:
             while not self.command_q.empty():
-                cmd = self.command_q.get(timeout=0.01)
+                cmd = self.command_q.get(timeout=0.1)
                 if cmd:
                     if cmd.command_name not in self.COMMAND_FUNCS:
                         print 'command \'' + cmd.command_name + '\' not found'

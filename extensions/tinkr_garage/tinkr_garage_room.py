@@ -7,7 +7,8 @@ import random
 class EventClientJoinGame(ClientGameEvent):
     event_id = '\x00'
     var_struct = [
-        ('car_id', 'i')
+        ('car_id', 'i'),
+        ('room_id', 'i')
     ]
 
 

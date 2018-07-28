@@ -76,7 +76,9 @@ class TinkrGateServer(GateServerBase):
                 if event_id == '\x00':  # match game request
                     # TODO: move join room to separate package
                     print 'join room event'
-                    self.assign_room(target_cid, pkg)
+                    desired_rid = unpack('<i', data[14:18])[0]
+                    print 'desired room id', desired_rid
+                    self.assign_room(target_cid, pkg, desired_rid)
 
             # pass to room if necessary (game event)
             if target_cid in self.client_connections:

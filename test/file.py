@@ -1,3 +1,6 @@
-f = open('c://users/benwu/desktop/ttt.txt', 'r')
-while True:
-    pass
+import requests
+import time
+
+start_time = time.time()
+t = requests.get('https://www.youtube.com/')
+print time.time() - start_time

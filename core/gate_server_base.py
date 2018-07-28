@@ -35,7 +35,7 @@ class GateServerBase(CommandServer):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(bind_addr)
         self.bind_addr = bind_addr
-        self.net_communicator = NetCommunicator(sock=sock, time_out=0.01)
+        self.net_communicator = NetCommunicator(sock=sock, time_out=0.1)
 
         self.last_connection_check_stamp = time.time()
 
