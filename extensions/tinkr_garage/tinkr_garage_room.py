@@ -62,6 +62,14 @@ class EventClientPing(ClientGameEvent):
     var_struct = []
 
 
+@app_client_game_event
+class EventClientHeal(ClientGameEvent):
+    event_id = '\x09'
+    var_struct = [
+        ('heal_val', 'i')
+    ]
+
+
 # server game events
 @app_server_game_event
 class EventServerSpawnPlayer(ServerGameEvent):
@@ -434,6 +442,17 @@ class TinkrGarageRoom(RoomServerBase):
         echo_evt.from_cid = evt.from_cid
         echo_evt.var['ping_start_stamp'] = evt.time_stamp
         self.game_event_manager.send_server_event(evt.from_cid, echo_evt)
+
+    @on_client_game_event(EventClientHeal)
+    def on_client_heal(self, evt):
+        from_cid = evt.from_cid
+        if from_cid in self.client_infos:
+            hp = self.client_infos[from_cid].state.HP
+            hp += evt.var['heal_val']
+            if hp > 100:
+                hp = 100
+            print 'client', from_cid, 'healed to', hp
+            self.client_infos[from_cid].state.HP = hp
 
     def tick_extra(self):
 

@@ -44,7 +44,7 @@ class TinkrGateServer(GateServerBase):
             if op_code == '\x12':   # event
                 event_id = unpack('<c', data[9:10])[0]
 
-                if event_id == '\x06':
+                if event_id == '\x06':  # ping
                     print 'ping event'
                     ping_start = unpack('<i', data[1:5])[0]
                     pkg_data = pack(
@@ -72,6 +72,10 @@ class TinkrGateServer(GateServerBase):
                     )
                     dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
                     print dlen, 'sent'
+                    return
+                if event_id == '\x08':  # logout
+                    # print 'logout event'
+                    # self.logout_client(target_cid)
                     return
                 if event_id == '\x00':  # match game request
                     # TODO: move join room to separate package
