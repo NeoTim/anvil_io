@@ -11,7 +11,7 @@ class ClientConnection:
     """
     client connection model
     """
-    MAX_NO_RESPONSE = 10    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 20    # max seconds with no response from client before disconnect it
 
     def __init__(self, r_ip, r_port, sock_c=None):
         self.sock_c = sock_c
@@ -136,7 +136,7 @@ class GateServerBase(CommandServer):
                 d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
                 if d_len == 22:  # TESTING
                     continue
-                print d_len, 'bytes sent to', remote_ip, remote_port
+                # print d_len, 'bytes sent to', remote_ip, remote_port
             else:
                 # print 'client', to_cid, 'not connected. no data sent'
                 pass

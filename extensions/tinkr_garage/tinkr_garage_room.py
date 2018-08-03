@@ -158,6 +158,15 @@ class EventServerUpdateSandStorm(ServerGameEvent):
     ]
 
 
+@app_server_game_event
+class EventServerPlayerDeath(ServerGameEvent):
+    event_id = '\x0b'
+    var_struct = [
+        ('killed_cid', 'i'),
+        ('killer_id', 'i')
+    ]
+
+
 class TinkrGarageRoom(RoomServerBase):
 
     class ClientState:
@@ -347,7 +356,7 @@ class TinkrGarageRoom(RoomServerBase):
                     evt_spawn_old.from_cid = existing_cid
                     evt_spawn_old.var['car_id'] = self.client_infos[existing_cid].state.vid
                     evt_spawn_old.var['spawn_slot'] = self.client_infos[existing_cid].state.spawn_slot
-                    print 'client', existing_cid, 'spawn_slot', evt_spawn_old.var['spawn_slot']
+                    # print 'client', existing_cid, 'spawn_slot', evt_spawn_old.var['spawn_slot']
                     self.game_event_manager.send_server_event(cid, evt_spawn_old)
 
             # add new client to map
@@ -366,7 +375,8 @@ class TinkrGarageRoom(RoomServerBase):
             # start game
             evt_start_game = EventServerStartGame()
             evt_start_game.from_cid = -1
-            self.game_event_manager.broadcast_server_event(evt_start_game)
+            self.game_event_manager.send_server_event(cid, evt_start_game)
+            # self.game_event_manager.broadcast_server_event(evt_start_game)
 
     @on_client_game_event(EventClientExitGame)
     def on_client_exit_game(self, evt):
@@ -403,12 +413,22 @@ class TinkrGarageRoom(RoomServerBase):
         hit_cid = evt.var['hit_cid']
         damage = evt.var['damage']
         damage *= 0.96
+        self.client_infos[hit_cid].state.HP -= damage
         print 'client', fire_cid, 'hit', hit_cid, ', damage', damage
         evt_damage = EventServerDamage()
         evt_damage.from_cid = hit_cid
         evt_damage.var['fire_cid'] = fire_cid
         evt_damage.var['damage'] = damage
         self.game_event_manager.broadcast_server_event(evt_damage)
+
+        # determine death
+        # TODO: centralize death event
+        if self.client_infos[hit_cid].state.HP <= 0:
+            evt_death = EventServerPlayerDeath()
+            evt_death.from_cid = hit_cid
+            evt_death.var['killed_cid'] = hit_cid
+            evt_death.var['killer_id'] = fire_cid
+            self.game_event_manager.broadcast_server_event(evt_death)
 
     @on_client_game_event(EventClientPickUpWeapon)
     def on_client_pick_up_weapon(self, evt):
@@ -529,6 +549,15 @@ class TinkrGarageRoom(RoomServerBase):
                                 evt_damage.var['fire_cid'] = -1  # server
                                 evt_damage.var['damage'] = damage
                                 self.game_event_manager.broadcast_server_event(evt_damage)
+
+                                # determine death
+                                # TODO: centralize death event
+                                if self.client_infos[cid].state.HP <= 0:
+                                    evt_death = EventServerPlayerDeath()
+                                    evt_death.from_cid = cid
+                                    evt_death.var['killed_cid'] = cid
+                                    evt_death.var['killer_id'] = -1  # -1 == storm
+                                    self.game_event_manager.broadcast_server_event(evt_death)
 
                 # update sand storm
                 storm_span = self.game_model.cur_storm_duration

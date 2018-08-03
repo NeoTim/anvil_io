@@ -69,6 +69,7 @@ class CommandServer:
                             self.COMMAND_FUNCS[cmd.command_name](*cmd.args, **cmd.kwargs)
                             # print cmd.command_name, 'execute delay:', time.time() - cmd.command_triggered_time
                         except Exception, e:
+                            print 'run command "' + cmd.command_name + '" error'
                             print e
                 self.command_q.task_done()
         except Queue.Empty, e:

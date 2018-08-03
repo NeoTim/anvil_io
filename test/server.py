@@ -11,31 +11,31 @@ CONFIG = {
 
 def main():
     # server socket
-    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    udpsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         server_ip = CONFIG['SERVER_IP']
         if len(sys.argv) > 1:
             server_ip = sys.argv[1]
-        tcpsock.bind((server_ip, CONFIG['PORT']))
-        tcpsock.listen(1024)
-        print 'server listening at: ', tcpsock.getsockname()
-        while True:
-            (sock_client, addr_clinet) = tcpsock.accept()
-            print 'client socket from ', addr_clinet
-            print 'respond to client'
+        udpsocket.bind((server_ip, CONFIG['PORT']))
+        # udpsocket.listen(1024)
+        print 'server listening at: ', udpsocket.getsockname()
+        if True:
+            # data, addr = udpsocket.recvfrom(1024)
+            # print 'client socket from ', addr
+            # print 'respond to client'
             # sock_client.settimeout(2)
+            time.sleep(0.02)
             while True:
                 try:
-                    data = sock_client.recv(1024)
+                    data, addr = udpsocket.recvfrom(1024)
                     print 'received from client: ' + data
-                    sock_client.sendall(data)
                 except socket.timeout:
                     print 'time out'
-                else:
-                    sock_client.close()
+                except Exception, e:
+                    print e
     finally:
         print 'server closed'
-        tcpsock.close()
+        udpsocket.close()
 
 
 class TestThread:
@@ -54,11 +54,15 @@ if __name__ == '__main__':
     sock.bind(('0.0.0.0', 10000))
     import time
     addr = None
-    while True:
-        try:
-            data, addr = sock.recvfrom(1024)
-            if data:
-                print 'message \'', data, '\'from', addr
-                sock.sendto('Hi Tinkr!', addr)
-        except Exception, e:
-            print e
+    try:
+        while True:
+            try:
+                data, addr = sock.recvfrom(1024)
+                if data:
+                    print 'message \'', data, '\'from', addr
+                    sock.sendto('Hi Tinkr!', addr)
+            except Exception, e:
+                print e
+    finally:
+        print 'socket closed'
+        sock.close()

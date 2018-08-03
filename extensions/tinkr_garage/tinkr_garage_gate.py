@@ -1,4 +1,5 @@
 from core.gate_server_base import GateServerBase
+from core.gate_server_base import ClientConnection
 from struct import *
 import core.tkutil as tkutil
 
@@ -6,6 +7,58 @@ import core.tkutil as tkutil
 class TinkrGateServer(GateServerBase):
     def __init__(self, room_server_class, bind_addr, server_name):
         GateServerBase.__init__(self, room_server_class, bind_addr, server_name)
+
+    def login_client(self, cid, token, remote_ip, remote_port):
+        res_code = '\x00'
+        if cid not in self.client_connections:
+            login_success = True    # TODO: the login state should be returned by login server
+            if login_success:
+                new_connection = ClientConnection(remote_ip, remote_port)
+                self.client_connections[cid] = new_connection
+                res_code = '\x00'   # 00 == login success
+                print 'client', cid, 'login success'
+                # self.post_login_client(cid)  # after login action
+            else:
+                res_code = '\x01'   # 01 == authorization failed
+                print 'client', cid, 'info not correct. login failed'
+        else:
+            res_code = '\x02'   # 02 == login conflict
+            print 'client', cid, 'already logged in'
+        pkg_data = pack(
+            '<ciicc',
+            '\x12',
+            tkutil.get_current_millisecond_clamped(),
+            cid,
+            '\x0a',  # \x0a == server login result event
+            res_code,
+        )
+        dlen = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
+        print dlen, 'sent'
+
+    def assign_room(self, cid, pkg, rid=-1):
+        room_id = 0     # default room id
+        if rid >= 0:    # if room id specified, use it
+            room_id = rid
+        else:
+            # TESTING
+            while room_id in self.room_servers and len(self.room_servers[room_id].client_infos) > 80:
+                room_id += 1
+        target_room = None
+        if room_id not in self.room_servers:        # create room if not exists
+            target_room = self.create_room(room_id)
+        else:
+            target_room = self.room_servers[room_id]
+        if not target_room:
+            print 'room error. no room available'
+        else:
+            if cid not in self.client_connections:
+                print 'client not logged in'
+            elif self.client_connections[cid].at_room >= 0:
+                print 'client already in room ', self.client_connections[cid].at_room
+            else:
+                print 'pass client', cid, 'to room', room_id
+                target_room.run_command('add_client', cid)
+                self.client_connections[cid].at_room = room_id
 
     def solve_package(self, pkg):
         data = pkg.data
@@ -62,16 +115,6 @@ class TinkrGateServer(GateServerBase):
                     print 'login event'
                     token = self.parse_token(data)
                     self.login_client(target_cid, token, addr[0], addr[1])
-                    pkg_data = pack(
-                        '<ciicc',
-                        '\x12',
-                        tkutil.get_current_millisecond_clamped(),
-                        target_cid,
-                        '\x0a',  # \x0a == server login result event
-                        '\x00',  # 00 == login success
-                    )
-                    dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                    print dlen, 'sent'
                     return
                 if event_id == '\x08':  # logout
                     # print 'logout event'
@@ -107,3 +150,13 @@ if __name__ == '__main__':
     time.sleep(0.5)
 
     gs.start_server()
+
+    time.sleep(2)
+
+    # spawn fake clients
+    round = 1
+    while round == 0:
+        if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
+            time.sleep(10)
+            gs.room_servers[0].run_command('spawn_fake_clients', 80)
+            round += 1

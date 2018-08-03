@@ -65,7 +65,9 @@ class NetCommunicator:
             except socket.timeout:
                 pass
             except Exception, e:
-                print e
+                if e.args[0] != 10054:  # TESTING, to skip window socket mis error
+                    print 'recv error', e
+                pass
         if data:
             return [data, addr]
         return [None, None]
