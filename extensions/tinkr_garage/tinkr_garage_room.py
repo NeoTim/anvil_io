@@ -2,7 +2,11 @@ from core.room_server_base import *
 import random
 
 
-# client game events
+"""
+    client game events
+"""
+
+
 @app_client_game_event
 class EventClientJoinGame(ClientGameEvent):
     event_id = '\x00'
@@ -70,7 +74,19 @@ class EventClientHeal(ClientGameEvent):
     ]
 
 
-# server game events
+@app_client_game_event
+class EventClientEquipWeapon(ClientGameEvent):
+    event_id = '\x0a'
+    var_struct = [
+        ('weapon_id', 'i'),
+        ('weapon_type', 'i')
+    ]
+
+"""
+    server game events
+"""
+
+
 @app_server_game_event
 class EventServerSpawnPlayer(ServerGameEvent):
     event_id = '\x00'
@@ -167,6 +183,15 @@ class EventServerPlayerDeath(ServerGameEvent):
     ]
 
 
+@app_server_game_event
+class EventServerPickUpWeapon(ServerGameEvent):
+    event_id = '\x0c'
+    var_struct = [
+        ('weapon_id', 'i'),
+        ('weapon_type', 'i')
+    ]
+
+
 class TinkrGarageRoom(RoomServerBase):
 
     class ClientState:
@@ -199,6 +224,11 @@ class TinkrGarageRoom(RoomServerBase):
             WAITING_CLIENTS = 0
             GAME_RUNNING = 1
 
+        class Weapon:
+            def __init__(self, weapon_id, weapon_type):
+                self.weapon_id = weapon_id
+                self.weapon_type = weapon_type
+
         def __init__(self):
 
             self.game_state = self.GameState.WAITING_CLIENTS
@@ -221,6 +251,15 @@ class TinkrGarageRoom(RoomServerBase):
             self.last_storm_damage_stamp = time.time()      # damage calc timer stamp
 
             self.ENABLE_STORM = True    # flag of storm enabling
+
+            # init weapons
+            # weapon_id => weapon
+            self.weapons = {}
+            for i in range(12):
+                if i == 4:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 2)
+                else:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 1)
 
         def true_xy_to_grid(self, true_x, true_y):
             """ true x, y to (grid x, grid y, sub grid x, sub grid y) """
@@ -257,6 +296,15 @@ class TinkrGarageRoom(RoomServerBase):
             self.next_storm_radius = 150000
 
             self.last_storm_damage_stamp = time.time()
+
+            # init weapons
+            # TODO: better reset weapons
+            self.weapons = {}
+            for i in range(12):
+                if i == 4:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 2)
+                else:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 1)
 
     def __init__(self, gate_server_ref, room_id, server_name='tinkr_room'):
         RoomServerBase.__init__(self, gate_server_ref, room_id, server_name)
@@ -295,14 +343,21 @@ class TinkrGarageRoom(RoomServerBase):
         return state
 
     def update_client_state(self, cid, new_state):
-        if cid in self.client_infos and new_state.last_state_stamp > self.client_infos[cid].state.last_state_stamp:
-            self.client_infos[cid].state.grid_x = new_state.grid_x
-            self.client_infos[cid].state.grid_y = new_state.grid_y
-            self.client_infos[cid].state.pos = new_state.pos
-            self.client_infos[cid].state.rot = new_state.rot
-            self.client_infos[cid].state.last_state_stamp = new_state.last_state_stamp
-        else:
-            print 'old state:', new_state.last_state_stamp, ', not update'
+        if cid in self.client_infos:
+            if self.client_infos[cid].state.HP <= 0:
+                # print 'client', cid, 'dead. no need to sync'
+                return False    # no need to update dead client
+            if new_state.last_state_stamp > self.client_infos[cid].state.last_state_stamp:
+                self.client_infos[cid].state.grid_x = new_state.grid_x
+                self.client_infos[cid].state.grid_y = new_state.grid_y
+                self.client_infos[cid].state.pos = new_state.pos
+                self.client_infos[cid].state.rot = new_state.rot
+                self.client_infos[cid].state.last_state_stamp = new_state.last_state_stamp
+                return True
+            else:
+                print 'old state:', new_state.last_state_stamp, ', not update'
+                return False
+        return False
 
     def post_add_client(self, cid):
         if len(self.client_infos) == 1:
@@ -411,19 +466,20 @@ class TinkrGarageRoom(RoomServerBase):
         print 'hit event'
         fire_cid = evt.from_cid
         hit_cid = evt.var['hit_cid']
-        damage = evt.var['damage']
-        damage *= 0.96
+        init_damage = evt.var['damage']
+        damage = float(init_damage) / 10000
         self.client_infos[hit_cid].state.HP -= damage
         print 'client', fire_cid, 'hit', hit_cid, ', damage', damage
         evt_damage = EventServerDamage()
         evt_damage.from_cid = hit_cid
         evt_damage.var['fire_cid'] = fire_cid
-        evt_damage.var['damage'] = damage
+        evt_damage.var['damage'] = init_damage
         self.game_event_manager.broadcast_server_event(evt_damage)
 
         # determine death
         # TODO: centralize death event
         if self.client_infos[hit_cid].state.HP <= 0:
+            print 'client', hit_cid, 'dead'
             evt_death = EventServerPlayerDeath()
             evt_death.from_cid = hit_cid
             evt_death.var['killed_cid'] = hit_cid
@@ -438,7 +494,11 @@ class TinkrGarageRoom(RoomServerBase):
         weapon_type = evt.var['weapon_type']
         equip_slot = evt.var['equip_slot']
 
+        # TODO: add real check
         pick_success = True
+        if weapon_id not in self.game_model.weapons:
+            print 'pick up weapon failed'
+            pick_success = False
 
         if pick_success:
 
@@ -448,13 +508,35 @@ class TinkrGarageRoom(RoomServerBase):
             evt_destroy_weapon.var['weapon_id'] = weapon_id
             self.game_event_manager.broadcast_server_event(evt_destroy_weapon)
 
+            # pick up weapon event
+            evt_pick_up_weapon = EventServerPickUpWeapon()
+            evt_pick_up_weapon.from_cid = evt.from_cid
+            evt_pick_up_weapon.var['weapon_id'] = weapon_id
+            evt_pick_up_weapon.var['weapon_type'] = weapon_type
+            self.game_event_manager.send_server_event(evt.from_cid, evt_pick_up_weapon)
+
+            # remove weapon
+            self.game_model.weapons.pop(weapon_id)
+
             # equip weapon event
-            evt_equip_weapon = EventServerEquipWeapon()
-            evt_equip_weapon.from_cid = evt.from_cid
-            evt_equip_weapon.var['weapon_id'] = weapon_id
-            evt_equip_weapon.var['weapon_type'] = weapon_type
-            evt_equip_weapon.var['equip_slot'] = equip_slot
-            self.game_event_manager.broadcast_server_event(evt_equip_weapon)
+            # evt_equip_weapon = EventServerEquipWeapon()
+            # evt_equip_weapon.from_cid = evt.from_cid
+            # evt_equip_weapon.var['weapon_id'] = weapon_id
+            # evt_equip_weapon.var['weapon_type'] = weapon_type
+            # evt_equip_weapon.var['equip_slot'] = equip_slot
+            # self.game_event_manager.broadcast_server_event(evt_equip_weapon)
+
+    @on_client_game_event(EventClientEquipWeapon)
+    def on_client_equip_weapon(self, evt):
+        print 'equip weapon event'
+        evt_equip_weapon = EventServerEquipWeapon()
+        evt_equip_weapon.from_cid = evt.from_cid
+        print 'wid', evt.var['weapon_id']
+        print 'wtype', evt.var['weapon_type']
+        evt_equip_weapon.var['weapon_id'] = evt.var['weapon_id']
+        evt_equip_weapon.var['weapon_type'] = evt.var['weapon_type']
+        evt_equip_weapon.var['equip_slot'] = 1  # may need later
+        self.game_event_manager.broadcast_server_event(evt_equip_weapon, [evt.from_cid])
 
     @on_client_game_event(EventClientPing)
     def on_client_ping(self, evt):
@@ -553,6 +635,7 @@ class TinkrGarageRoom(RoomServerBase):
                                 # determine death
                                 # TODO: centralize death event
                                 if self.client_infos[cid].state.HP <= 0:
+                                    print 'client', cid, 'dead'
                                     evt_death = EventServerPlayerDeath()
                                     evt_death.from_cid = cid
                                     evt_death.var['killed_cid'] = cid

@@ -2,16 +2,33 @@ from core.gate_server_base import GateServerBase
 from core.gate_server_base import ClientConnection
 from struct import *
 import core.tkutil as tkutil
+import requests
+import json
 
 
 class TinkrGateServer(GateServerBase):
     def __init__(self, room_server_class, bind_addr, server_name):
         GateServerBase.__init__(self, room_server_class, bind_addr, server_name)
 
+    def authenticate_client(self, cid, token):
+        try:
+            # TODO: make request through api
+            response = requests.get(
+                'https://tinkrinc.com/api/checksession?pid=' + str(cid) + '&sessionid=' + str(token),
+                timeout=5
+            )
+            res = json.loads(response.text)
+            if res['result'] == 'succeed':
+                return True
+            return False
+        except requests.exceptions.Timeout, e:
+            print 'web server timed out.'
+        return False
+
     def login_client(self, cid, token, remote_ip, remote_port):
         res_code = '\x00'
         if cid not in self.client_connections:
-            login_success = True    # TODO: the login state should be returned by login server
+            login_success = self.authenticate_client(cid, token)
             if login_success:
                 new_connection = ClientConnection(remote_ip, remote_port)
                 self.client_connections[cid] = new_connection
@@ -60,6 +77,11 @@ class TinkrGateServer(GateServerBase):
                 target_room.run_command('add_client', cid)
                 self.client_connections[cid].at_room = room_id
 
+    def parse_token(self, pkg_data):
+        token = unpack('<i', pkg_data[14:18])[0]
+        print 'get session', token
+        return token
+
     def solve_package(self, pkg):
         data = pkg.data
         addr = (pkg.ip, pkg.port)
@@ -92,7 +114,6 @@ class TinkrGateServer(GateServerBase):
             elif op_code == '\x02':  # logout
                 self.logout_client(target_cid)
         elif op_code <= '\x1f':  # game package
-
             # TODO: move login handling to admin package
             if op_code == '\x12':   # event
                 event_id = unpack('<c', data[9:10])[0]

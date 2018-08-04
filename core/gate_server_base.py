@@ -11,7 +11,7 @@ class ClientConnection:
     """
     client connection model
     """
-    MAX_NO_RESPONSE = 20    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 30    # max seconds with no response from client before disconnect it
 
     def __init__(self, r_ip, r_port, sock_c=None):
         self.sock_c = sock_c
@@ -273,7 +273,7 @@ class GateServerBase(CommandServer):
             for cid in [ccid for ccid in self.client_connections]:
                 if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
                     print 'timeout. client', cid, 'connection closed'
-                    self.quit_room(cid)
+                    # self.quit_room(cid)
                     self.logout_client(cid)
 
     def loop(self):

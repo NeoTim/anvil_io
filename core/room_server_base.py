@@ -261,6 +261,7 @@ class RoomServerBase(CommandServer):
         def __init__(self, client_state):
             self.state = client_state   # instance of ClientState
             self.state_latest_stamp = 0    # timestamp of latest state package
+            self.need_update = False    # flag to sync client state
 
     def __init__(self, gate_server_ref, room_id, server_name='room_server'):
         CommandServer.__init__(self, server_name)
@@ -317,9 +318,9 @@ class RoomServerBase(CommandServer):
                 client_state_count = 0
                 data_to_send = ''
                 for cid in self.client_infos:
-                    if client_state_count > 50:
-                        # TODO: remove this check
-                        break
+                    if not self.client_infos[cid].need_update:
+                        continue
+                    self.client_infos[cid].need_update = True
                     data_to_send += pack('<i', cid) + self.pack_client_state(cid)
                     client_state_count += 1
                 data_to_send = pack('<i', client_state_count) + data_to_send
@@ -343,9 +344,13 @@ class RoomServerBase(CommandServer):
             print 'sync states error'
 
     def update_client_state(self, cid, new_state):
-        """ method to update client state given new state data"""
+        """
+            method to update client state given new state data
+            return true if state updated
+        """
         # TODO: try not new client state
         self.client_infos[cid].state = new_state
+        return True
 
     def handle_client_state_package(self, pkg):
         """ | op_code | seq | cid | state """
@@ -353,7 +358,7 @@ class RoomServerBase(CommandServer):
         cid = unpack('<i', pkg.data[5:9])[0]
         new_state = self.unpack_client_state(pkg.data)
         # update client state
-        self.update_client_state(cid, new_state)
+        self.client_infos[cid].need_update = self.update_client_state(cid, new_state)
 
     def handle_game_event_package(self, pkg):
         """ | op_code | seq | cid | eid | event data """
