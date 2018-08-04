@@ -255,7 +255,7 @@ class TinkrGarageRoom(RoomServerBase):
             # init weapons
             # weapon_id => weapon
             self.weapons = {}
-            for i in range(12):
+            for i in range(13):
                 if i == 4:
                     self.weapons[i + 1] = self.Weapon(i + 1, 2)
                 else:
@@ -300,7 +300,7 @@ class TinkrGarageRoom(RoomServerBase):
             # init weapons
             # TODO: better reset weapons
             self.weapons = {}
-            for i in range(12):
+            for i in range(13):
                 if i == 4:
                     self.weapons[i + 1] = self.Weapon(i + 1, 2)
                 else:
