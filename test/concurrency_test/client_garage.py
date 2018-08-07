@@ -178,7 +178,7 @@ def main():
     SERVER_PORT = 10001
     server_addr = (SERVER_IP, SERVER_PORT)
 
-    NUM_CLIENT = 500
+    NUM_CLIENT = 1000
     for i in range(NUM_CLIENT):
         # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         client_agent = ClientAgent(30001 + i, server_addr)

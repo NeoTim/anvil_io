@@ -168,7 +168,7 @@ if __name__ == '__main__':
     import time
 
     rs_class = TinkrGarageRoom
-    gs = TinkrGateServer(rs_class, ('0.0.0.0', 10001), 'tinkr_garage_gate')
+    gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
 
     # gs.create_room(666)
     # gs.room_servers[666].run_command('set_storm_enabling', 0)
