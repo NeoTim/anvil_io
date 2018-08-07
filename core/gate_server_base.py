@@ -11,7 +11,7 @@ class ClientConnection:
     """
     client connection model
     """
-    MAX_NO_RESPONSE = 30    # max seconds with no response from client before disconnect it
+    MAX_NO_RESPONSE = 300    # max seconds with no response from client before disconnect it
 
     def __init__(self, r_ip, r_port, sock_c=None):
         self.sock_c = sock_c

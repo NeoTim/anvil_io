@@ -28,7 +28,8 @@ class TinkrGateServer(GateServerBase):
     def login_client(self, cid, token, remote_ip, remote_port):
         res_code = '\x00'
         if cid not in self.client_connections:
-            login_success = self.authenticate_client(cid, token)
+            # TESTING
+            login_success = True  # self.authenticate_client(cid, token)
             if login_success:
                 new_connection = ClientConnection(remote_ip, remote_port)
                 self.client_connections[cid] = new_connection
@@ -120,17 +121,21 @@ class TinkrGateServer(GateServerBase):
 
                 if event_id == '\x06':  # ping
                     print 'ping event'
-                    ping_start = unpack('<i', data[1:5])[0]
-                    pkg_data = pack(
-                        '<ciici',
-                        '\x12',
-                        tkutil.get_current_millisecond_clamped(),
-                        target_cid,
-                        '\x08',
-                        ping_start
-                    )
-                    dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                    print dlen, 'sent'
+                    # TESTING
+                    if target_cid in self.client_connections:
+                        ping_start = unpack('<i', data[1:5])[0]
+                        pkg_data = pack(
+                            '<ciici',
+                            '\x12',
+                            tkutil.get_current_millisecond_clamped(),
+                            target_cid,
+                            '\x08',
+                            ping_start
+                        )
+                        dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
+                        print dlen, 'sent'
+                    else:
+                        print 'no echo for not logged in clients'
                     return
                 if event_id == '\x07':   # login
                     print 'login event'
@@ -163,10 +168,10 @@ if __name__ == '__main__':
     import time
 
     rs_class = TinkrGarageRoom
-    gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
+    gs = TinkrGateServer(rs_class, ('0.0.0.0', 10001), 'tinkr_garage_gate')
 
-    gs.create_room(666)
-    gs.room_servers[666].run_command('set_storm_enabling', 0)
+    # gs.create_room(666)
+    # gs.room_servers[666].run_command('set_storm_enabling', 0)
 
     time.sleep(0.5)
 

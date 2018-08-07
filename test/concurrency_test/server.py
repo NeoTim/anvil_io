@@ -164,5 +164,18 @@ def main():
     gs = ServerDirectMultiIOProcess()
     gs.start()
 
+
+def test(q):
+    q.put('hi multi process')
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    from multiprocessing import Process, Queue
+    q = Queue()
+    p = Process(target=test, args=(q,))
+
+    p.start()
+    p.join()
+    content = q.get()
+    print content

@@ -199,12 +199,14 @@ class GameEventManager:
         """ raise server event to client """
         data_to_send = pack('<ic', evt.from_cid, evt.event_id) + evt.pack()
         gate_server_ref = self.room_server_ref.gate_server_ref
-        gate_server_ref.run_command(
-            'send_package',
-            [to_cid],
-            data_to_send,
-            '\x12'
-        )
+        # gate_server_ref.run_command(
+        #     'send_package',
+        #     [to_cid],
+        #     data_to_send,
+        #     '\x12'
+        # )
+        # TESTING
+        gate_server_ref.send_package([to_cid], data_to_send, '\x12')
 
     def broadcast_server_event(self, evt, exclude=list()):
         """ broadcast server event to clients """
@@ -215,12 +217,14 @@ class GameEventManager:
         data_to_send = pack('<ic', evt.from_cid, evt.event_id) + evt.pack()
         if evt.event_id == '\x09':
             print 'radius sent:', unpack('<i', data_to_send[9:13])[0]   # TESTING
-        self.room_server_ref.gate_server_ref.run_command(
-            'send_package',
-            target_cids,
-            data_to_send,
-            '\x12'
-        )
+        # self.room_server_ref.gate_server_ref.run_command(
+        #     'send_package',
+        #     target_cids,
+        #     data_to_send,
+        #     '\x12'
+        # )
+        # TESTING
+        self.room_server_ref.gate_server_ref.send_package(target_cids, data_to_send, '\x12')
         pass
 
     def handle_event(self, evt):
@@ -333,12 +337,14 @@ class RoomServerBase(CommandServer):
                             # continue
                             pass
                         target_cids.append(target_cid)
-                    self.gate_server_ref.run_command(
-                        'send_package',
-                        target_cids,
-                        data_to_send,
-                        '\x11'
-                    )
+                    # self.gate_server_ref.run_command(
+                    #     'send_package',
+                    #     target_cids,
+                    #     data_to_send,
+                    #     '\x11'
+                    # )
+                    # TESTING
+                    self.gate_server_ref.send_package(target_cids, data_to_send, '\x11')
         except Exception, e:
             print e
             print 'sync states error'

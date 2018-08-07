@@ -42,11 +42,11 @@ class ClientAgent(Thread):
         self.client_state = ClientState()
         self.init_client_state()
 
-        self.last_send_state_time = time.time()
-        self.last_ping_time = time.time()
+        self.last_send_state_time = 0
+        self.last_ping_time = 0
         self.last_server_response_time = time.time()
-        self.last_login_request_time = time.time()
-        self.last_join_game_request_time = time.time()
+        self.last_login_request_time = 0
+        self.last_join_game_request_time = 0
 
     def init_client_state(self):
         for i in range(5):
@@ -67,11 +67,13 @@ class ClientAgent(Thread):
         print 'client', self.cid, 'login requested'
         self.sock.sendto(
             pack(
-                '<ciic',
+                '<ciicii',
                 '\x12',
                 get_current_millisecond_clamped(),
                 self.cid,
-                '\x07'
+                '\x07',
+                2,
+                999
             ),
             self.server_addr
         )
@@ -120,8 +122,25 @@ class ClientAgent(Thread):
 
     def run(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(1)
+        self.sock.settimeout(5)
         while True:
+
+            # agent state switch
+            if self.agent_state == self.AgentState.NOT_LOGGED_IN:
+                if time.time() - self.last_login_request_time > self.LOGIN_REQUEST_WAIT:
+                    self.last_login_request_time = time.time()
+                    self.login()
+            if self.agent_state == self.AgentState.LOGGED_IN:
+                if time.time() - self.last_join_game_request_time > self.JOIN_GAME_REQUEST_WAIT:
+                    self.last_join_game_request_time = time.time()
+                    self.join_game()
+                if time.time() - self.last_ping_time > 1.0 / self.PING_RATE:
+                    self.ping()
+                    self.last_ping_time = time.time()
+            if self.agent_state == self.AgentState.IN_GAME:
+                if time.time() - self.last_send_state_time > 1.0 / self.STATE_SEND_RATE:
+                    self.send_state()
+                    self.last_send_state_time = time.time()
 
             # recv data
             try:
@@ -135,7 +154,7 @@ class ClientAgent(Thread):
                         event_id = unpack('<c', data[9])[0]
                         if event_id == '\x0a':  # login response
                             login_res = unpack('<c', data[10])[0]
-                            if login_res == '\x00':
+                            if True:  # login_res == '\x00':
                                 self.agent_state = self.AgentState.LOGGED_IN
                                 print 'client', self.cid, 'logged in'
                         if event_id == '\x04':  # game start
@@ -143,22 +162,6 @@ class ClientAgent(Thread):
                             print 'client', self.cid, 'joined game'
             except Exception, e:
                 pass
-
-            # agent state switch
-            if self.agent_state == self.AgentState.NOT_LOGGED_IN:
-                if time.time() - self.last_login_request_time > self.LOGIN_REQUEST_WAIT:
-                    self.last_login_request_time = time.time()
-                    self.login()
-            if self.agent_state == self.AgentState.LOGGED_IN:
-
-                self.join_game()
-                if time.time() - self.last_ping_time > 1.0 / self.PING_RATE:
-                    self.ping()
-                    self.last_ping_time = time.time()
-            if self.agent_state == self.AgentState.IN_GAME:
-                if time.time() - self.last_send_state_time > 1.0 / self.STATE_SEND_RATE:
-                    self.send_state()
-                    self.last_send_state_time = time.time()
 
             # logout self if server no response
             if self.agent_state != self.AgentState.NOT_LOGGED_IN:
@@ -171,14 +174,14 @@ def main():
     import threading
     import multiprocessing
 
-    SERVER_IP = '192.168.145.132'
+    SERVER_IP = '192.168.145.200'
     SERVER_PORT = 10001
     server_addr = (SERVER_IP, SERVER_PORT)
 
-    NUM_CLIENT = 100
+    NUM_CLIENT = 500
     for i in range(NUM_CLIENT):
         # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        client_agent = ClientAgent(20001 + i, server_addr)
+        client_agent = ClientAgent(30001 + i, server_addr)
         client_agent.start()
 
 if __name__ == '__main__':
