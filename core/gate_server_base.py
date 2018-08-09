@@ -276,6 +276,10 @@ class GateServerBase(CommandServer):
                     # self.quit_room(cid)
                     self.logout_client(cid)
 
+            # TESTING
+            for rid in self.room_servers:
+                print 'room', rid, 'has', len(self.room_servers[rid].client_infos), 'clients'
+
     def loop(self):
         try:
             while True:

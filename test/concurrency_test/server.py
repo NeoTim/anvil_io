@@ -171,11 +171,49 @@ def test(q):
 
 if __name__ == '__main__':
     # main()
-    from multiprocessing import Process, Queue
-    q = Queue()
-    p = Process(target=test, args=(q,))
 
-    p.start()
-    p.join()
-    content = q.get()
-    print content
+    # from multiprocessing import Process, Queue
+    # q = Queue()
+    # p = Process(target=test, args=(q,))
+    #
+    # p.start()
+    # p.join()
+    # content = q.get()
+    # print content
+
+    gate_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    gate_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    gate_sock.bind(('192.168.145.31', 20000))
+    gate_sock.settimeout(2)
+
+    connections = []
+
+    try:
+        while True:
+            try:
+                print 'gate listen'
+                data, addr = gate_sock.recvfrom(1024)
+                if data:
+                    print 'new connect msg', data, 'from', addr
+                    new_scok = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    new_scok.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    new_scok.bind(('192.168.145.31', 20000))
+                    new_scok.settimeout(1)
+                    new_scok.connect(addr)
+                    connections.append(new_scok)
+                    dlen = new_scok.sendto('ok', addr)
+                    print dlen, 'sent'
+                for sock in connections:
+                    try:
+                        msg, r_addr = sock.recvfrom(1024)
+                        if msg:
+                            print 'get message ', msg, 'from', r_addr
+                    except Exception, e:
+                        print e
+            except Exception, e:
+                print e
+        pass
+    finally:
+        gate_sock.close()
+        for sock in connections:
+            sock.close()

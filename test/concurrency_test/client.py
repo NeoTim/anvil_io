@@ -138,10 +138,26 @@ class ClientProcess(Process):
 
 
 def main():
-    for i in range(10):
-        p = ClientProcess(i)
-        p.start()
-        # p.join()
+    # for i in range(10):
+    #     p = ClientProcess(i)
+    #     p.start()
+    #     # p.join()
+    c_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        c_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        c_sock.bind(('192.168.145.31', 30000))
+        c_sock.sendto('login', ('192.168.145.31', 20000))
+        data, addr = c_sock.recvfrom(1024)
+        if data:
+            print data
+            if data == 'ok':
+                print 'login success'
+                c_sock.connect(('192.168.145.31', 20000))
+                while True:
+                    c_sock.sendto('hi', addr)
+                    time.sleep(1)
+    finally:
+        c_sock.close()
 
 if __name__ == '__main__':
     main()

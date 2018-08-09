@@ -194,6 +194,8 @@ class EventServerPickUpWeapon(ServerGameEvent):
 
 class TinkrGarageRoom(RoomServerBase):
 
+    AI_UPDATE_RATE = 0.3
+
     class ClientState:
         def __init__(self):
             self.grid_x = '\x15'
@@ -205,6 +207,7 @@ class TinkrGarageRoom(RoomServerBase):
             self.spawn_slot = 0
             self.is_faked = False   # if a client is AI
             self.last_state_stamp = 0   # time stamp of last state update (in client's system time)
+            self.is_dead = False
 
     class GameModel:
 
@@ -255,9 +258,13 @@ class TinkrGarageRoom(RoomServerBase):
             # init weapons
             # weapon_id => weapon
             self.weapons = {}
-            for i in range(13):
+            for i in range(15):
                 if i == 4:
                     self.weapons[i + 1] = self.Weapon(i + 1, 2)
+                elif i == 13:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 3)
+                elif i == 14:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 4)
                 else:
                     self.weapons[i + 1] = self.Weapon(i + 1, 1)
 
@@ -300,9 +307,13 @@ class TinkrGarageRoom(RoomServerBase):
             # init weapons
             # TODO: better reset weapons
             self.weapons = {}
-            for i in range(13):
+            for i in range(15):
                 if i == 4:
                     self.weapons[i + 1] = self.Weapon(i + 1, 2)
+                elif i == 13:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 3)
+                elif i == 14:
+                    self.weapons[i + 1] = self.Weapon(i + 1, 4)
                 else:
                     self.weapons[i + 1] = self.Weapon(i + 1, 1)
 
@@ -311,6 +322,7 @@ class TinkrGarageRoom(RoomServerBase):
         self.game_model = self.GameModel()
         self.start_stamp = time.time()  # the timestamp of starting time
         self.match_str = ''     # string used to match particular room. each room has a unique string
+        self.last_ai_update_stamp = 0
 
     def pack_client_state(self, cid):
         state = self.client_infos[cid].state
@@ -397,7 +409,7 @@ class TinkrGarageRoom(RoomServerBase):
 
             # init to-join client info
             self.client_infos[cid].state.vid = vid
-            new_spawn_slot = len(self.client_infos)
+            new_spawn_slot = len(self.client_infos) % 99
             if cid > 100:   # not AI
                 # TODO: remove this check
                 new_spawn_slot %= 8
@@ -478,7 +490,8 @@ class TinkrGarageRoom(RoomServerBase):
 
         # determine death
         # TODO: centralize death event
-        if self.client_infos[hit_cid].state.HP <= 0:
+        if not self.client_infos[hit_cid].state.is_dead and self.client_infos[hit_cid].state.HP <= 0:
+            self.client_infos[hit_cid].state.is_dead = True
             print 'client', hit_cid, 'dead'
             evt_death = EventServerPlayerDeath()
             evt_death.from_cid = hit_cid
@@ -497,6 +510,7 @@ class TinkrGarageRoom(RoomServerBase):
         # TODO: add real check
         pick_success = True
         if weapon_id not in self.game_model.weapons:
+            print 'wid', weapon_id, 'wtype', weapon_type
             print 'pick up weapon failed'
             pick_success = False
 
@@ -563,20 +577,14 @@ class TinkrGarageRoom(RoomServerBase):
         if self.game_model.game_state == self.GameModel.GameState.GAME_RUNNING:
 
             # update fake clients
-            ai_ind = 0
-            if ai_ind in self.client_infos:
-                # int_sec = int(time.time())
-                # if int_sec % 9 == 0:
-                #     self.client_infos[ai_ind].state.pos[0] = '\xa3'
-                #     self.client_infos[ai_ind].state.pos[1] = '\xa3'
-                # elif int_sec % 6 == 0:
-                #     self.client_infos[ai_ind].state.pos[0] = '\xff'
-                #     self.client_infos[ai_ind].state.pos[1] = '\xff'
-                # elif int_sec % 3 == 0:
-                #     self.client_infos[ai_ind].state.pos[0] = '\x33'
-                #     self.client_infos[ai_ind].state.pos[1] = '\x33'
-                self.client_infos[ai_ind].state.grid_x = '\x21'
-                self.client_infos[ai_ind].state.pos[2] = 3000
+            if time.time() - self.last_ai_update_stamp > 1.0 / self.AI_UPDATE_RATE:
+                self.last_ai_update_stamp = time.time()
+                for ai_ind in range(100):
+                    if ai_ind in self.client_infos:
+                        self.client_infos[ai_ind].state.grid_x = pack('<i', random.randint(0, 80))[0]
+                        self.client_infos[ai_ind].state.grid_y = pack('<i', random.randint(0, 80))[0]
+                        self.client_infos[ai_ind].need_update = True
+                        pass
 
             # storm logic
             if self.game_model.ENABLE_STORM:
@@ -634,7 +642,8 @@ class TinkrGarageRoom(RoomServerBase):
 
                                 # determine death
                                 # TODO: centralize death event
-                                if self.client_infos[cid].state.HP <= 0:
+                                if not self.client_infos[cid].state.is_dead and self.client_infos[cid].state.HP <= 0:
+                                    self.client_infos[cid].state.is_dead = True
                                     print 'client', cid, 'dead'
                                     evt_death = EventServerPlayerDeath()
                                     evt_death.from_cid = cid

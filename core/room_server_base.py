@@ -324,7 +324,7 @@ class RoomServerBase(CommandServer):
                 for cid in self.client_infos:
                     if not self.client_infos[cid].need_update:
                         continue
-                    self.client_infos[cid].need_update = True
+                    # self.client_infos[cid].need_update = True
                     data_to_send += pack('<i', cid) + self.pack_client_state(cid)
                     client_state_count += 1
                 data_to_send = pack('<i', client_state_count) + data_to_send

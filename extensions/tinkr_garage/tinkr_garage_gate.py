@@ -142,6 +142,21 @@ class TinkrGateServer(GateServerBase):
                     token = self.parse_token(data)
                     self.login_client(target_cid, token, addr[0], addr[1])
                     return
+                if event_id == '\x0b':  # re-login
+                    print 're-login event'
+                    relogin_res = '\x00'    # 00 == ok
+                    if target_cid in self.client_connections:
+                        pkg_data = pack(
+                            '<ciicc',
+                            '\x12',
+                            tkutil.get_current_millisecond_clamped(),
+                            target_cid,
+                            '\x0d',
+                            relogin_res
+                        )
+                        #dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
+                        #print dlen, 'sent'
+                    return
                 if event_id == '\x08':  # logout
                     # print 'logout event'
                     # self.logout_client(target_cid)
@@ -184,5 +199,5 @@ if __name__ == '__main__':
     while round == 0:
         if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
             time.sleep(10)
-            gs.room_servers[0].run_command('spawn_fake_clients', 80)
+            gs.room_servers[0].run_command('spawn_fake_clients', 10)
             round += 1
