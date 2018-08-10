@@ -18,6 +18,13 @@ def main():
 
     gs.start_server()
 
+    # add fake clients to room 666
+    while True:
+        if 666 in gs.room_servers and len(gs.room_servers[666].client_infos) > 0:
+            time.sleep(10)
+            gs.room_servers[0].run_command('spawn_fake_clients', 50)
+            break
+
 
 if __name__ == '__main__':
     main()

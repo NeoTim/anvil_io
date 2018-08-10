@@ -34,6 +34,10 @@ class GateServerBase(CommandServer):
         self.room_servers = {}  # room servers ref
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(bind_addr)
+        bufsize = sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+        print 'send buffer size', bufsize
+        bufsize = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+        print 'recv buffer size', bufsize
         self.bind_addr = bind_addr
         self.net_communicator = NetCommunicator(sock=sock, time_out=0.1)
 

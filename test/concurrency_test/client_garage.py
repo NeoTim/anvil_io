@@ -174,7 +174,7 @@ def main():
     import threading
     import multiprocessing
 
-    SERVER_IP = '192.168.145.31'
+    SERVER_IP = '192.168.145.171'
     SERVER_PORT = 10000
     server_addr = (SERVER_IP, SERVER_PORT)
 

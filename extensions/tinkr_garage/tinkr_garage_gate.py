@@ -154,8 +154,8 @@ class TinkrGateServer(GateServerBase):
                             '\x0d',
                             relogin_res
                         )
-                        #dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                        #print dlen, 'sent'
+                        dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
+                        print dlen, 'sent'
                     return
                 if event_id == '\x08':  # logout
                     # print 'logout event'
@@ -185,8 +185,8 @@ if __name__ == '__main__':
     rs_class = TinkrGarageRoom
     gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
 
-    # gs.create_room(666)
-    # gs.room_servers[666].run_command('set_storm_enabling', 0)
+    gs.create_room(666)
+    gs.room_servers[666].run_command('set_storm_enabling', 0)
 
     time.sleep(0.5)
 
