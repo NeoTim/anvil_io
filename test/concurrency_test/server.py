@@ -200,6 +200,7 @@ if __name__ == '__main__':
                     new_scok.bind(('192.168.145.31', 20000))
                     new_scok.settimeout(1)
                     new_scok.connect(addr)
+                    print 'new sock', new_scok.getsockname()
                     connections.append(new_scok)
                     dlen = new_scok.sendto('ok', addr)
                     print dlen, 'sent'

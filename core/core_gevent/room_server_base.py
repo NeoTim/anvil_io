@@ -1,9 +1,7 @@
 from command_server import *
 import time
-import copy
-import inspect
 from struct import *
-
+import Queue
 
 # room server structs dict
 ROOM_SERVER_STRUCTS = {
@@ -209,13 +207,6 @@ class GameEventManager:
         """ raise server event to client """
         data_to_send = pack('<ic', evt.from_cid, evt.event_id) + evt.pack()
         gate_server_ref = self.room_server_ref.gate_server_ref
-        # gate_server_ref.run_command(
-        #     'send_package',
-        #     [to_cid],
-        #     data_to_send,
-        #     '\x12'
-        # )
-        # TESTING
         gate_server_ref.send_package([to_cid], data_to_send, '\x12')
 
     def broadcast_server_event(self, evt, exclude=list()):
@@ -225,17 +216,10 @@ class GameEventManager:
             if target_cid not in exclude:
                 target_cids.append(target_cid)
         data_to_send = pack('<ic', evt.from_cid, evt.event_id) + evt.pack()
-        if evt.event_id == '\x09':
-            print 'radius sent:', unpack('<i', data_to_send[9:13])[0]   # TESTING
-        # self.room_server_ref.gate_server_ref.run_command(
-        #     'send_package',
-        #     target_cids,
-        #     data_to_send,
-        #     '\x12'
-        # )
         # TESTING
+        # if evt.event_id == '\x09':
+        #     print 'radius sent:', unpack('<i', data_to_send[9:13])[0]
         self.room_server_ref.gate_server_ref.send_package(target_cids, data_to_send, '\x12')
-        pass
 
     def handle_event(self, evt):
         # interface to handle events
@@ -258,7 +242,7 @@ class GameEventManager:
 
 class RoomServerBase(CommandServer):
 
-    CLIENT_UPDATE_RATE = 15     # 20fps
+    CLIENT_UPDATE_RATE = 15     # fps
 
     class ClientState:
         """ class of client state """
@@ -320,15 +304,15 @@ class RoomServerBase(CommandServer):
 
     def tick_client_state_sync(self):
         """
-        sync client states to all
+        coroutine = sync client states to all
         | op_code | seq | state_count | state(s)
              1       4         4           n
         state = | cid | packed client state |
         :return:
         """
-        try:
-            if time.time() - self.last_client_sync > 1.0 / self.CLIENT_UPDATE_RATE:
-                self.last_client_sync = time.time()
+        CLIENT_UPDATE_INTERVAL = 1.0 / self.CLIENT_UPDATE_RATE
+        while True:
+            try:
                 client_state_count = 0
                 data_to_send = ''
                 for cid in self.client_infos:
@@ -347,17 +331,11 @@ class RoomServerBase(CommandServer):
                             # continue
                             pass
                         target_cids.append(target_cid)
-                    # self.gate_server_ref.run_command(
-                    #     'send_package',
-                    #     target_cids,
-                    #     data_to_send,
-                    #     '\x11'
-                    # )
-                    # TESTING
                     self.gate_server_ref.send_package(target_cids, data_to_send, '\x11')
-        except Exception, e:
-            print e
-            print 'sync states error'
+            except Exception, e:
+                print e
+                print 'sync states error'
+            gevent.sleep(CLIENT_UPDATE_INTERVAL)
 
     def update_client_state(self, cid, new_state):
         """
@@ -370,7 +348,6 @@ class RoomServerBase(CommandServer):
 
     def handle_client_state_package(self, pkg):
         """ | op_code | seq | cid | state """
-        # (op_code, seq, cid) = unpack('<cii', pkg.data[0:9])
         cid = unpack('<i', pkg.data[5:9])[0]
         new_state = self.unpack_client_state(pkg.data)
         # update client state
@@ -384,7 +361,10 @@ class RoomServerBase(CommandServer):
         evt.from_cid = cid  # from client id
         evt.time_stamp = seq    # timestamp of the event
         # put event into queue
-        self.game_event_manager.game_event_q.put(evt)
+        # self.game_event_manager.game_event_q.put(evt)
+
+        # directly handle event
+        self.game_event_manager.handle_event(evt)
 
     @on_command('handle_package')
     def handle_package(self, pkg):
@@ -414,7 +394,6 @@ class RoomServerBase(CommandServer):
         if op_code <= '\x0f':   # admin package
             pass
         elif op_code <= '\x1f':     # game package
-            # TODO: update client state or handle game event
             if op_code == '\x11':   # state update
                 self.handle_client_state_package(pkg)
             elif op_code == '\x12':   # game event
@@ -423,106 +402,36 @@ class RoomServerBase(CommandServer):
             pass
 
     def tick_game_event(self):
-        # solve and clear the game event queue
-        try:
-            while not self.game_event_manager.game_event_q.empty():
-                evt = self.game_event_manager.game_event_q.get(timeout=0.01)
+        """
+        coroutine = solve and clear the game event queue
+        """
+        while True:
+            try:
+                print 'tick event'
+                evt = self.game_event_manager.game_event_q.get()
                 self.game_event_manager.handle_event(evt)
-                self.game_event_manager.game_event_q.task_done()
-        except Exception, e:
-            print e
+            except Exception, e:
+                print e
+                print 'event error'
+            gevent.sleep(0.01)
 
     def tick_extra(self):
         pass
 
-    def loop(self):
-        try:
-            while True:
-                self.tick_command()
-                self.tick_game_event()
-                self.tick_client_state_sync()
-                self.tick_extra()
-                pass
-        except Exception, e:
-            print e
-        finally:
-            print 'room -', self.room_id, 'ends'
-
     def start_server(self):
         try:
-            self.server_thread = threading.Thread(target=self.loop)
-            print 'room -', self.room_id, 'starts'
-            self.server_thread.start()
+            threads = [
+                gevent.spawn(self.tick_command),
+                # gevent.spawn(self.tick_game_event),
+                gevent.spawn(self.tick_client_state_sync),
+                gevent.spawn(self.tick_extra)
+            ]
+            print 'room', self.room_id, 'starts'
+            gevent.joinall(threads)
         except Exception, e:
             print e
-
-example_game_model_config = {
-    'MODE': 'NORMAL',
-    'VAR': {
-        'var1': 0,
-        'var2': 'var2',
-        'var3': 2.0
-    }
-}
-example_client_state_config = {
-    'VAR': {
-        'var1': 0,
-        'var2': 'var2',
-        'var3': [2.0, 2.0, 2.0]
-    }
-}
-
-
-def room_server_class(cls):
-    return cls
-
-
-# class RoomServerFactory:
-#
-#     def __init__(self):
-#         pass
-#
-#     @classmethod
-#     def make_game_model_class(cls, game_model_config):
-#         class AppGameModel(GameModelBase):
-#             def __init__(self):
-#                 game_mode = game_model_config['MODE']
-#                 GameModelBase.__init__(self, game_mode)
-#                 for var in game_model_config['VAR']:
-#                     self.__dict__[var] = game_model_config['VAR'][var]
-#         return AppGameModel
-#
-#     @classmethod
-#     def make_client_state_class(cls, client_state_config):
-#         class AppClientState(ClientStateBase):
-#             def __init__(self):
-#                 ClientStateBase.__init__(self)
-#                 for var in client_state_config['VAR']:
-#                     self.__dict__[var] = client_state_config['VAR'][var]
-#         return AppClientState
-#
-#     @classmethod
-#     def make_room_server_class(cls, game_model_config, client_state_config, game_event_config):
-#         """
-#         Factory method to make room server instance given game_model, client_state and game_event
-#         :param game_model_config:
-#         :param client_state_config:
-#         :param game_event_config:
-#         :return:
-#         """
-#         class AppRoomServer(RoomServerBase):
-#             game_model_class = RoomServerFactory.make_game_model_class(game_model_config)
-#             client_state_class = RoomServerFactory.make_client_state_class(client_state_config)
-#             # TODO: game event manager / handler
-#
-#             def __init__(self, gate_server_ref, room_id, server_name='app_room_server'):
-#                 RoomServerBase.__init__(self, gate_server_ref, room_id, server_name)
-#         return AppRoomServer
+        print 'room', self.room_id, 'ends'
 
 
 if __name__ == '__main__':
-    # rs_class = RoomServerFactory.make_room_server_class(0, 0, 0)
-    # rs = rs_class(example_game_model_config, example_client_state_config)
-    # rs.start_server()
-    # rs.run_command('handle_package', 3)
     pass

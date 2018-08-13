@@ -1,4 +1,4 @@
-from core.room_server_base import *
+from core.core_gevent.room_server_base import *
 import random
 
 
@@ -386,11 +386,6 @@ class TinkrGarageRoom(RoomServerBase):
 
     def pack_client_state(self, cid):
         state = self.client_infos[cid].state
-        # print unpack('<h', state.grid_x + '\x00')
-        # print unpack('<h', state.grid_y + '\x00')
-        # print unpack('<h', state.pos[0] + '\x00')
-        # print unpack('<h', state.pos[1] + '\x00')
-        # print state.pos[2]
         return pack('<cccchccc', state.grid_x, state.grid_y, state.pos[0], state.pos[1], state.pos[2], state.rot[0], state.rot[1], state.rot[2])
 
     def unpack_client_state(self, pkg_data):
@@ -655,146 +650,137 @@ class TinkrGarageRoom(RoomServerBase):
             self.client_infos[from_cid].state.HP = hp
 
     def tick_extra(self):
+        """
+        coroutine = main game model logic
+        """
+        GAME_LOGIC_INTERVAL = 1.0 / 60
+        while True:
+            try:
+                if self.game_model.game_state == self.GameModel.GameState.GAME_RUNNING:
+                    # update fake clients
+                    if time.time() - self.last_ai_update_stamp > 1.0 / self.AI_UPDATE_RATE:
+                        self.last_ai_update_stamp = time.time()
+                        for ai_ind in range(100):
+                            if ai_ind in self.client_infos:
+                                self.client_infos[ai_ind].state.grid_x = pack('<i', random.randint(0, 5))[0]
+                                self.client_infos[ai_ind].state.grid_y = pack('<i', random.randint(0, 5))[0]
+                                self.client_infos[ai_ind].need_update = True
+                                pass
+                    # storm logic
+                    if self.game_model.ENABLE_STORM:
+                        # calculate shrinking storm
+                        if self.game_model.storm_shrink_start_stamp > 0:
+                            shrink_time = time.time() - self.game_model.storm_shrink_start_stamp    # time after shrink start
+                            if shrink_time > 0:
+                                if shrink_time > self.game_model.storm_shrink_duration:
+                                    self.game_model.cur_storm_center[0] = self.game_model.next_storm_center[0]
+                                    self.game_model.cur_storm_center[1] = self.game_model.next_storm_center[1]
+                                    self.game_model.cur_storm_radius = self.game_model.next_storm_radius
+                                    self.game_model.storm_shrink_start_stamp = -1
+                                    print 'shrinking done. current radius', self.game_model.cur_storm_radius, 'current center', self.game_model.cur_storm_center[0], self.game_model.cur_storm_center[1]
+                                else:
+                                    alpha = shrink_time / self.game_model.storm_shrink_duration
+                                    self.game_model.cur_storm_center[0] = (1 - alpha) * self.game_model.prev_storm_center[0] + alpha * self.game_model.next_storm_center[0]
+                                    self.game_model.cur_storm_center[1] = (1 - alpha) * self.game_model.prev_storm_center[1] + alpha * self.game_model.next_storm_center[1]
+                                    self.game_model.cur_storm_radius = (1 - alpha) * self.game_model.prev_storm_radius + alpha * self.game_model.next_storm_radius
+                        # calculate storm damage
+                        # TESTING
+                        if time.time() - self.game_model.last_storm_damage_stamp > 2:   # tick every 2 secs
+                            self.game_model.last_storm_damage_stamp = time.time()
+                            # SHOULD BE cur_storm_center
+                            # cur_center_xy = self.game_model.grid_xy_to_true(21, 51, 160, 160)
+                            cur_center_xy = self.game_model.cur_storm_center
+                            # print 'damage calc center:', self.game_model.cur_storm_center, ', damage radius:', self.game_model.cur_storm_radius
+                            # print 'current storm center', cur_center_xy
+                            for cid in self.client_infos:
+                                if self.client_infos[cid].state.HP > 0:
+                                    # print 'client', cid, 'HP', self.client_infos[cid].state.HP
+                                    client_xy = self.game_model.grid_xy_to_true(
+                                        unpack('<h', self.client_infos[cid].state.grid_x + '\x00')[0],
+                                        unpack('<h', self.client_infos[cid].state.grid_y + '\x00')[0],
+                                        unpack('<h', self.client_infos[cid].state.pos[0] + '\x00')[0],
+                                        unpack('<h', self.client_infos[cid].state.pos[1] + '\x00')[0]
+                                    )
+                                    # print 'client pos', client_xy
+                                    dx = client_xy[0] - cur_center_xy[0]
+                                    dy = client_xy[1] - cur_center_xy[1]
+                                    if dx * dx + dy * dy > self.game_model.cur_storm_radius * self.game_model.cur_storm_radius:
+                                        damage = 10000
+                                        # print 'storm damage', damage
+                                        self.client_infos[cid].state.HP -= damage / 10000
+                                        evt_damage = EventServerDamage()
+                                        evt_damage.from_cid = cid   # damaged client
+                                        evt_damage.var['fire_cid'] = -1  # server
+                                        evt_damage.var['damage'] = damage
+                                        self.game_event_manager.broadcast_server_event(evt_damage)
 
-        """ main game model logic """
+                                        # determine death
+                                        # TODO: centralize death event
+                                        if not self.client_infos[cid].state.is_dead and self.client_infos[cid].state.HP <= 0:
+                                            self.client_infos[cid].state.is_dead = True
+                                            print 'client', cid, 'dead'
+                                            evt_death = EventServerPlayerDeath()
+                                            evt_death.from_cid = cid
+                                            evt_death.var['killed_cid'] = cid
+                                            evt_death.var['killer_id'] = -1  # -1 == storm
+                                            self.game_event_manager.broadcast_server_event(evt_death)
+                        # update sand storm
+                        storm_span = self.game_model.cur_storm_duration
+                        if self.game_model.storm_pkg_count > 1:   # if not first update, accumulate shrink delay and shrink time
+                            storm_span = self.game_model.cur_storm_duration + self.game_model.storm_shrink_delay + self.game_model.storm_shrink_duration
+                        if time.time() - self.game_model.last_storm_update_stamp > storm_span:
+                            if time.time() - self.start_stamp < 15:  # TESTING
+                                return
+                            # counter update
+                            self.game_model.storm_pkg_count += 1
+                            print 'storm update at time', time.time()
+                            self.game_model.last_storm_update_stamp = time.time()
+                            # calculate next storm
+                            # self.game_model.cur_storm_radius = self.game_model.next_storm_radius
+                            if self.game_model.storm_pkg_count > 1:
+                                self.game_model.next_storm_radius -= 5000
+                                while self.game_model.next_storm_radius <= 0:
+                                    self.game_model.next_storm_radius += 5000
+                                self.game_model.next_storm_center[0] = self.game_model.cur_storm_center[0] + random.randint(1, 20000) - 10000
+                                self.game_model.next_storm_center[1] = self.game_model.cur_storm_center[1] + random.randint(1, 20000) - 10000
+                            # self.game_model.cur_storm_duration = 15
+                            # must update last storm info
+                            for i in range(len(self.game_model.cur_storm_center)):
+                                self.game_model.prev_storm_center[i] = self.game_model.cur_storm_center[i]
+                            self.game_model.prev_storm_radius = self.game_model.cur_storm_radius
+                            # send update event
+                            evt_storm_update = EventServerUpdateSandStorm()
+                            evt_storm_update.from_cid = -1
+                            # TESTING
+                            next_grids = self.game_model.true_xy_to_grid(self.game_model.next_storm_center[0], self.game_model.next_storm_center[1])
+                            evt_storm_update.var['cur_center'] = [
+                                pack('<h', next_grids[0])[0],
+                                pack('<h', next_grids[1])[0],
+                                pack('<h', next_grids[2])[0],
+                                pack('<h', next_grids[3])[0],
+                            ]  # ['\x15', '\x33', '\xa0', '\xa0']  # self.game_model.cur_storm_center
+                            evt_storm_update.var['cur_radius'] = self.game_model.next_storm_radius  # ACTUALLY NEXT STORM INFO
+                            shrink_speed = float(
+                                self.game_model.cur_storm_radius - self.game_model.next_storm_radius) / self.game_model.storm_shrink_duration
+                            if self.game_model.storm_pkg_count == 1:
+                                shrink_speed = 10000
+                            evt_storm_update.var['shrink_speed'] = int(shrink_speed)
+                            evt_storm_update.var['time_to_appear_next'] = self.game_model.cur_storm_duration
+                            evt_storm_update.var['time_to_shrink'] = self.game_model.storm_shrink_delay
+                            self.game_event_manager.broadcast_server_event(evt_storm_update)
+                            # print 'center sent:', self.game_model.next_storm_center
 
-        if self.game_model.game_state == self.GameModel.GameState.GAME_RUNNING:
+                            # set shrink start stamp, otherwise the shrink won't start
+                            if self.game_model.storm_pkg_count > 1:  # IF NOT FIRST PACKAGE
+                                self.game_model.storm_shrink_start_stamp = time.time() + self.game_model.storm_shrink_delay
 
-            # update fake clients
-            if time.time() - self.last_ai_update_stamp > 1.0 / self.AI_UPDATE_RATE:
-                self.last_ai_update_stamp = time.time()
-                for ai_ind in range(100):
-                    if ai_ind in self.client_infos:
-                        self.client_infos[ai_ind].state.grid_x = pack('<i', random.randint(0, 5))[0]
-                        self.client_infos[ai_ind].state.grid_y = pack('<i', random.randint(0, 5))[0]
-                        self.client_infos[ai_ind].need_update = True
-                        pass
-
-            # storm logic
-            if self.game_model.ENABLE_STORM:
-
-                # calculate shrinking storm
-                if self.game_model.storm_shrink_start_stamp > 0:
-                    shrink_time = time.time() - self.game_model.storm_shrink_start_stamp    # time after shrink start
-                    if shrink_time > 0:
-                        if shrink_time > self.game_model.storm_shrink_duration:
-                            self.game_model.cur_storm_center[0] = self.game_model.next_storm_center[0]
-                            self.game_model.cur_storm_center[1] = self.game_model.next_storm_center[1]
-                            self.game_model.cur_storm_radius = self.game_model.next_storm_radius
-                            self.game_model.storm_shrink_start_stamp = -1
-                            print 'shrinking done. current radius', self.game_model.cur_storm_radius, 'current center', self.game_model.cur_storm_center[0], self.game_model.cur_storm_center[1]
-                        else:
-                            alpha = shrink_time / self.game_model.storm_shrink_duration
-                            # print 'alpha', alpha, self.game_model.prev_storm_radius, self.game_model.next_storm_radius
-                            self.game_model.cur_storm_center[0] = (1 - alpha) * self.game_model.prev_storm_center[0] + alpha * self.game_model.next_storm_center[0]
-                            self.game_model.cur_storm_center[1] = (1 - alpha) * self.game_model.prev_storm_center[1] + alpha * self.game_model.next_storm_center[1]
-                            self.game_model.cur_storm_radius = (1 - alpha) * self.game_model.prev_storm_radius + alpha * self.game_model.next_storm_radius
-
-                # calculate storm damage
-                # TESTING
-                if time.time() - self.game_model.last_storm_damage_stamp > 2:   # tick every 2 secs
-
-                    self.game_model.last_storm_damage_stamp = time.time()
-
-                    # SHOULD BE cur_storm_center
-                    # cur_center_xy = self.game_model.grid_xy_to_true(21, 51, 160, 160)
-                    cur_center_xy = self.game_model.cur_storm_center
-                    # print 'damage calc center:', self.game_model.cur_storm_center, ', damage radius:', self.game_model.cur_storm_radius
-                    # print 'current storm center', cur_center_xy
-
-                    for cid in self.client_infos:
-                        if self.client_infos[cid].state.HP > 0:
-                            # print 'client', cid, 'HP', self.client_infos[cid].state.HP
-                            client_xy = self.game_model.grid_xy_to_true(
-                                unpack('<h', self.client_infos[cid].state.grid_x + '\x00')[0],
-                                unpack('<h', self.client_infos[cid].state.grid_y + '\x00')[0],
-                                unpack('<h', self.client_infos[cid].state.pos[0] + '\x00')[0],
-                                unpack('<h', self.client_infos[cid].state.pos[1] + '\x00')[0]
-                            )
-                            # print 'client pos', client_xy
-                            dx = client_xy[0] - cur_center_xy[0]
-                            dy = client_xy[1] - cur_center_xy[1]
-                            if dx * dx + dy * dy > self.game_model.cur_storm_radius * self.game_model.cur_storm_radius:
-                                damage = 10000
-                                # print 'storm damage', damage
-                                self.client_infos[cid].state.HP -= damage / 10000
-                                evt_damage = EventServerDamage()
-                                evt_damage.from_cid = cid   # damaged client
-                                evt_damage.var['fire_cid'] = -1  # server
-                                evt_damage.var['damage'] = damage
-                                self.game_event_manager.broadcast_server_event(evt_damage)
-
-                                # determine death
-                                # TODO: centralize death event
-                                if not self.client_infos[cid].state.is_dead and self.client_infos[cid].state.HP <= 0:
-                                    self.client_infos[cid].state.is_dead = True
-                                    print 'client', cid, 'dead'
-                                    evt_death = EventServerPlayerDeath()
-                                    evt_death.from_cid = cid
-                                    evt_death.var['killed_cid'] = cid
-                                    evt_death.var['killer_id'] = -1  # -1 == storm
-                                    self.game_event_manager.broadcast_server_event(evt_death)
-
-                # update sand storm
-                storm_span = self.game_model.cur_storm_duration
-                if self.game_model.storm_pkg_count > 1:   # if not first update, accumulate shrink delay and shrink time
-                    storm_span = self.game_model.cur_storm_duration + self.game_model.storm_shrink_delay + self.game_model.storm_shrink_duration
-                if time.time() - self.game_model.last_storm_update_stamp > storm_span:
-
-                    if time.time() - self.start_stamp < 15:  # TESTING
-                        return
-
-                    # counter update
-                    self.game_model.storm_pkg_count += 1
-
-                    print 'storm update at time', time.time()
-                    self.game_model.last_storm_update_stamp = time.time()
-
-                    # calculate next storm
-                    # self.game_model.cur_storm_radius = self.game_model.next_storm_radius
-                    if self.game_model.storm_pkg_count > 1:
-                        self.game_model.next_storm_radius -= 5000
-                        while self.game_model.next_storm_radius <= 0:
-                            self.game_model.next_storm_radius += 5000
-                        self.game_model.next_storm_center[0] = self.game_model.cur_storm_center[0] + random.randint(1, 20000) - 10000
-                        self.game_model.next_storm_center[1] = self.game_model.cur_storm_center[1] + random.randint(1, 20000) - 10000
-                    # self.game_model.cur_storm_duration = 15
-                    # must update last storm info
-                    for i in range(len(self.game_model.cur_storm_center)):
-                        self.game_model.prev_storm_center[i] = self.game_model.cur_storm_center[i]
-                    self.game_model.prev_storm_radius = self.game_model.cur_storm_radius
-
-                    # send update event
-                    evt_storm_update = EventServerUpdateSandStorm()
-                    evt_storm_update.from_cid = -1
-                    # TESTING
-                    next_grids = self.game_model.true_xy_to_grid(self.game_model.next_storm_center[0], self.game_model.next_storm_center[1])
-                    evt_storm_update.var['cur_center'] = [
-                        pack('<h', next_grids[0])[0],
-                        pack('<h', next_grids[1])[0],
-                        pack('<h', next_grids[2])[0],
-                        pack('<h', next_grids[3])[0],
-                    ]  # ['\x15', '\x33', '\xa0', '\xa0']  # self.game_model.cur_storm_center
-                    evt_storm_update.var['cur_radius'] = self.game_model.next_storm_radius  # ACTUALLY NEXT STORM INFO
-                    shrink_speed = float(
-                        self.game_model.cur_storm_radius - self.game_model.next_storm_radius) / self.game_model.storm_shrink_duration
-                    if self.game_model.storm_pkg_count == 1:
-                        shrink_speed = 10000
-                    evt_storm_update.var['shrink_speed'] = int(shrink_speed)
-                    evt_storm_update.var['time_to_appear_next'] = self.game_model.cur_storm_duration
-                    evt_storm_update.var['time_to_shrink'] = self.game_model.storm_shrink_delay
-                    self.game_event_manager.broadcast_server_event(evt_storm_update)
-                    # print 'center sent:', self.game_model.next_storm_center
-
-                    # set shrink start stamp, otherwise the shrink won't start
-                    if self.game_model.storm_pkg_count > 1:  # IF NOT FIRST PACKAGE
-                        self.game_model.storm_shrink_start_stamp = time.time() + self.game_model.storm_shrink_delay
-
-                    # print 'storm radius:', self.game_model.cur_storm_radius
-                    # print 'time until next storm:', self.game_model.cur_storm_duration
-                    # print 'shrink duration:', self.game_model.storm_shrink_duration
-
-            pass
+                            # print 'storm radius:', self.game_model.cur_storm_radius
+                            # print 'time until next storm:', self.game_model.cur_storm_duration
+                            # print 'shrink duration:', self.game_model.storm_shrink_duration
+                    pass
+            except Exception, e:
+                print e
+            gevent.sleep(GAME_LOGIC_INTERVAL)
 
     @on_command('spawn_fake_clients')
     def spawn_fake_clients(self, num):

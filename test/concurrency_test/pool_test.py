@@ -19,22 +19,68 @@
 #
 # c = consumer()
 # produce(c)
-import gevent
-from gevent import Greenlet
-from gevent.event import AsyncResult
-import gevent.socket
+#import gevent
+#from gevent import Greenlet
+# from gevent.event import AsyncResult
+# import gevent.socket
+#
+# a = AsyncResult()
+#
+# def setter():
+#     gevent.sleep(3)
+#     a.set('?')
+#
+# def waiter():
+#     print (a.get())
+#
+# gevent.joinall([
+#     gevent.spawn(setter),
+#     gevent.spawn(waiter),
+#     gevent.spawn(waiter)
+# ])
 
-a = AsyncResult()
+# from multiprocessing import Process, Queue
+# import time
+# q = Queue()
+#
+# def room_process(q, gate_ref):
+#     print 'room starts'
+#     while True:
+#         try:
+#             msg = q.get()
+#             if msg:
+#                 if msg == 'stop':
+#                     break
+#                 else:
+#                     print 'room get msg', msg
+#         except Exception, e:
+#             pass
+#     print 'room ends'
+#
+# def gate_process(q):
+#     room_ref = Process(target=room_process, args=(q,))
+#     room_ref.start()
+#     for i in range(10):
+#         try:
+#             time.sleep(1)
+#             q.put(i, timeout=2)
+#             print 'gate send', i, 'to room'
+#         except Exception, e:
+#             pass
+#     q.put('stop')
+#
+# if __name__ == '__main__':
+#     gate = Process(target=gate_process, args=(q,))
+#     gate.start()
 
-def setter():
-    gevent.sleep(3)
-    a.set('?')
+import threading
+import time
 
-def waiter():
-    print (a.get())
+class ThreadA(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
 
-gevent.joinall([
-    gevent.spawn(setter),
-    gevent.spawn(waiter),
-    gevent.spawn(waiter)
-])
+    def run(self):
+        while True:
+            print 'test 1'
+            time.sleep(0.1)

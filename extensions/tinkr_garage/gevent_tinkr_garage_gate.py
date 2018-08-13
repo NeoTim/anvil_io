@@ -1,5 +1,4 @@
-from core.gate_server_base import GateServerBase
-from core.gate_server_base import ClientConnection
+from core.core_gevent.gate_server_base import GateServerBase, ClientConnection
 from struct import *
 import core.tkutil as tkutil
 import requests
@@ -29,7 +28,7 @@ class TinkrGateServer(GateServerBase):
         res_code = '\x00'
         if cid not in self.client_connections:
             # TESTING
-            login_success = True  # self.authenticate_client(cid, token)
+            login_success = self.authenticate_client(cid, token)
             if login_success:
                 new_connection = ClientConnection(remote_ip, remote_port)
                 self.client_connections[cid] = new_connection
@@ -59,7 +58,7 @@ class TinkrGateServer(GateServerBase):
             room_id = rid
         else:
             # TESTING
-            while room_id in self.room_servers and len(self.room_servers[room_id].client_infos) > 80:
+            while room_id in self.room_servers and len(self.room_servers[room_id].client_infos) >= 80:
                 room_id += 1
         target_room = None
         if room_id not in self.room_servers:        # create room if not exists
@@ -87,26 +86,7 @@ class TinkrGateServer(GateServerBase):
         data = pkg.data
         addr = (pkg.ip, pkg.port)
         op_code = unpack('<c', data[0])[0]
-        # int_op_code = tkutil.get_int_from_byte(op_code)
         target_cid = unpack('<i', data[5:5 + 4])[0]
-
-        # TESTING
-        # if op_code == '\x12':   # ping event
-        #     eid = unpack('<c', data[9:10])[0]
-        #     if eid == '\x06':
-        #         print 'ping event'
-        #         ping_start = unpack('<i', data[1:5])[0]
-        #         pkg_data = pack(
-        #             '<ciici',
-        #             '\x12',
-        #             tkutil.get_current_millisecond_clamped(),
-        #             target_cid,
-        #             '\x08',
-        #             ping_start
-        #         )
-        #         dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-        #         print dlen, 'sent'
-        #         return
 
         if op_code <= '\x0f':  # admin package
             if op_code == '\x01':  # login
@@ -118,7 +98,7 @@ class TinkrGateServer(GateServerBase):
             # TODO: move login handling to admin package
             if op_code == '\x12':   # event
                 event_id = unpack('<c', data[9:10])[0]
-
+                # print 'event id', unpack('<h', event_id + '\x00')[0]
                 if event_id == '\x06':  # ping
                     print 'ping event'
                     # TESTING
@@ -135,7 +115,7 @@ class TinkrGateServer(GateServerBase):
                         dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
                         print dlen, 'sent'
                     else:
-                        print 'no echo for not logged out clients'
+                        print 'no echo for not logged in clients'
                     return
                 if event_id == '\x07':   # login
                     print 'login event'
@@ -158,6 +138,7 @@ class TinkrGateServer(GateServerBase):
                         print dlen, 'sent'
                     return
                 if event_id == '\x08':  # logout
+                    # TODO: logout
                     # print 'logout event'
                     # self.logout_client(target_cid)
                     return
@@ -179,25 +160,21 @@ class TinkrGateServer(GateServerBase):
 
 if __name__ == '__main__':
 
-    from tinkr_garage_room import TinkrGarageRoom
+    from gevent_tinkr_garage_room import TinkrGarageRoom
     import time
 
     rs_class = TinkrGarageRoom
     gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
 
-    gs.create_room(666)
-    gs.room_servers[666].run_command('set_storm_enabling', 0)
-
-    time.sleep(0.5)
+    # gs.create_room(0)
+    # gs.room_servers[0].run_command('set_storm_enabling', 0)
 
     gs.start_server()
 
-    time.sleep(2)
-
     # spawn fake clients
-    round = 1
-    while round == 0:
+    spawn_fake_clients = False
+    if spawn_fake_clients:
         if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
-            time.sleep(10)
-            gs.room_servers[0].run_command('spawn_fake_clients', 10)
+            time.sleep(15)
+            gs.room_servers[0].run_command('spawn_fake_clients', 1)
             round += 1

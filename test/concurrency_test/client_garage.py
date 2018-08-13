@@ -157,7 +157,7 @@ class ClientAgent(Thread):
                             if True:  # login_res == '\x00':
                                 self.agent_state = self.AgentState.LOGGED_IN
                                 print 'client', self.cid, 'logged in'
-                        if event_id == '\x04':  # game start
+                        if event_id == '\x0e':  # game matched
                             self.agent_state = self.AgentState.IN_GAME
                             print 'client', self.cid, 'joined game'
             except Exception, e:
@@ -174,15 +174,16 @@ def main():
     import threading
     import multiprocessing
 
-    SERVER_IP = '192.168.145.171'
+    SERVER_IP = '10.26.238.151' # '167.99.169.64'
     SERVER_PORT = 10000
     server_addr = (SERVER_IP, SERVER_PORT)
 
-    NUM_CLIENT = 500
+    NUM_CLIENT = 1000
     for i in range(NUM_CLIENT):
         # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        client_agent = ClientAgent(0 + i, server_addr)
+        client_agent = ClientAgent(20000 + i, server_addr)
         client_agent.start()
+        time.sleep(0.01)
 
 if __name__ == '__main__':
     main()

@@ -45,6 +45,8 @@ class CommandServer:
         self.server_thread = None
         self.server_name = server_name
 
+        self.last_command_tick_stamp = 0
+
     def run_command(self, command_name, *args, **kwargs):
         """
         method to trigger command call
@@ -60,7 +62,7 @@ class CommandServer:
         try:
             # TESTING
             while not self.command_q.empty():
-                cmd = self.command_q.get(timeout=0)
+                cmd = self.command_q.get(timeout=0.01)
                 if cmd:
                     if cmd.command_name not in self.COMMAND_FUNCS:
                         print 'command \'' + cmd.command_name + '\' not found'

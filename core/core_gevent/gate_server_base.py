@@ -1,10 +1,15 @@
 from command_server import *
-from network.net_communicator import NetCommunicator
-from network.net_package import NetPackage
+from net_package import NetPackage
+from net_communicator import NetCommunicator
 import socket
 from struct import *
 import time
-import tkutil
+import core.tkutil as tkutil
+import threading
+
+import gevent
+from gevent import monkey
+monkey.patch_socket()   # should be careful to use
 
 
 class ClientConnection:
@@ -29,7 +34,6 @@ class GateServerBase(CommandServer):
     def __init__(self, room_server_class, bind_addr=('0.0.0.0', 10000), server_name='gate_server'):
         CommandServer.__init__(self, server_name)
         self.client_connections = {}    # TODO: this dict might need to be synchronized among threads
-        # self.package_client_routing = {}    # ip address => client id
         self.room_server_class = room_server_class
         self.room_servers = {}  # room servers ref
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -41,7 +45,7 @@ class GateServerBase(CommandServer):
         bufsize = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
         print 'recv buffer size', bufsize
         self.bind_addr = bind_addr
-        self.net_communicator = NetCommunicator(sock=sock, time_out=0.01)
+        self.net_communicator = NetCommunicator('UDP', sock=sock, time_out=0)   # timeout == 0 => return immediately
 
         self.last_connection_check_stamp = time.time()
 
@@ -85,7 +89,9 @@ class GateServerBase(CommandServer):
         new_room_server = self.room_server_class(self, res_rid)
         self.room_servers[rid] = new_room_server
         print 'room', res_rid, 'created'
-        new_room_server.start_server()  # run room server
+        # run room server
+        room_thread = threading.Thread(target=new_room_server.start_server)
+        room_thread.start()
         return new_room_server
 
     def assign_room(self, cid, pkg, rid=-1):
@@ -141,9 +147,8 @@ class GateServerBase(CommandServer):
                 remote_port = self.client_connections[to_cid].remote_port
                 d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
                 # TESTING
-                if op_code != '\x11':
+                if op_code != '\x11':   # if not state
                     print d_len, 'bytes sent to', remote_ip, remote_port
-                    pass
             else:
                 # print 'client', to_cid, 'not connected. no data sent'
                 pass
@@ -153,163 +158,60 @@ class GateServerBase(CommandServer):
         return ''
 
     def solve_package(self, pkg):
-        data = pkg.data
-        addr = (pkg.ip, pkg.port)
-        op_code = unpack('<c', data[0])[0]
-        # int_op_code = tkutil.get_int_from_byte(op_code)
-        target_cid = unpack('<i', data[5:5 + 4])[0]
-
-        if op_code <= '\x0f':  # admin package
-            if op_code == '\x01':  # login
-                token = self.parse_token(data)
-                self.login_client(target_cid, token, addr[0], addr[1])
-            elif op_code == '\x02':  # logout
-                self.logout_client(target_cid)
-        elif op_code <= '\x1f':  # game package
-
-            # TODO: move login handling to admin package
-            if op_code == '\x12':
-                event_id = unpack('<c', data[9:10])[0]
-                if event_id == '\x00':
-                    print 'login event'
-                    token = self.parse_token(data)
-                    self.login_client(target_cid, token, addr[0], addr[1])
-
-                    # TODO: move join room to separate package
-                    print 'join room event'
-                    self.assign_room(target_cid, pkg)
-
-                elif event_id == '\x06':
-                    print 'ping event'
-                    ping_start = unpack('<i', data[1:5])[0]
-                    pkg_data = pack(
-                        '<ciici',
-                        '\x12',
-                        tkutil.get_current_millisecond_clamped(),
-                        target_cid,
-                        '\x08',
-                        ping_start
-                    )
-                    dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                    print dlen, 'sent'
-                    return
-
-            if target_cid in self.client_connections:
-                at_room = self.client_connections[target_cid].at_room
-                if at_room >= 0:
-                    # self.room_servers[at_room].run_command('handle_package', pkg)
-                    # TESTING
-                    self.room_servers[at_room].handle_package(pkg)
-
-        elif op_code <= '\x2f':  # sys info package
-            pass
+        raise NotImplementedError
 
     def tick_package(self):
         """
-        tick function to process incoming packages
-        | op_code | seq | cid | game data ...
-             1       4     4        n
-        :return:
+        coroutine = tick function to process incoming packages
         """
-        pkg = None
-        [data, addr] = self.net_communicator.receive_data()
-        if data:
-            pkg = NetPackage(data, addr[0], addr[1])
-            # update client last response time
-            target_cid = unpack('<i', data[5:5 + 4])[0]
-            if target_cid in self.client_connections:
-                self.client_connections[target_cid].last_package_time = time.time()
-        if pkg:
-            try:
-                # op_code = unpack('<c', data[0])[0]
-                # # int_op_code = tkutil.get_int_from_byte(op_code)
-                # target_cid = unpack('<i', data[5:5+4])[0]
-                #
-                # # TESTING !!
-                # if op_code == '\x12':
-                #     eid = unpack('<c', data[9:10])[0]
-                #     if eid == '\x06':
-                #         print 'ping event'
-                #         ping_start = unpack('<i', data[1:5])[0]
-                #         pkg_data = pack(
-                #             '<ciici',
-                #             '\x12',
-                #             tkutil.get_current_millisecond_clamped(),
-                #             target_cid,
-                #             '\x08',
-                #             ping_start
-                #         )
-                #         dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                #         print dlen, 'sent'
-                #         return
-                #
-                # if op_code <= '\x0f':  # admin package
-                #     if op_code == '\x01':   # login
-                #         token = self.parse_token(data)
-                #         self.login_client(target_cid, token, addr[0], addr[1])
-                #     elif op_code == '\x02':  # logout
-                #         self.logout_client(target_cid)
-                # elif op_code <= '\x1f':  # game package
-                #
-                #     # TODO: move login handling to admin package
-                #     if op_code == '\x12':
-                #         event_id = unpack('<c', data[9:10])[0]
-                #         if event_id == '\x00':
-                #             print 'login event'
-                #             token = self.parse_token(data)
-                #             self.login_client(target_cid, token, addr[0], addr[1])
-                #
-                #             # TODO: move join room to separate package
-                #             print 'join room event'
-                #             self.assign_room(target_cid, pkg)
-                #
-                #     if target_cid in self.client_connections:
-                #         at_room = self.client_connections[target_cid].at_room
-                #         if at_room >= 0:
-                #             self.room_servers[at_room].run_command('handle_package', pkg)
-                # elif op_code <= '\x2f':  # sys info package
-                #     pass
-                self.solve_package(pkg)
-                pass
-            except KeyError, e:
-                print e
-                print 'unknown package'
+        while True:
+            pkg = None
+            # TODO: avoid copy value from socket responses
+            [data, addr] = self.net_communicator.receive_data()
+            if data:
+                pkg = NetPackage(data, addr[0], addr[1])
+                # update client last response time
+                target_cid = unpack('<i', data[5:5 + 4])[0]
+                if target_cid in self.client_connections:
+                    self.client_connections[target_cid].last_package_time = time.time()
+            if pkg:
+                try:
+                    self.solve_package(pkg)
+                except KeyError, e:
+                    print e
+                    print 'unknown package'
+            gevent.sleep(0)
 
     def tick_connection_check(self):
-        if time.time() - self.last_connection_check_stamp > self.CONNECTION_CHECK_INTERVAL:
-            self.last_connection_check_stamp = time.time()
+        """
+        coroutine = check client timeout
+        """
+        while True:
             # detect if the client connection is timed out
             for cid in [ccid for ccid in self.client_connections]:
                 if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
                     print 'timeout. client', cid, 'connection closed'
-                    # self.quit_room(cid)
                     self.logout_client(cid)
-
             # TESTING
             for rid in self.room_servers:
                 print 'room', rid, 'has', len(self.room_servers[rid].client_infos), 'clients'
-
-    def loop(self):
-        try:
-            while True:
-                self.tick_command()
-                self.tick_package()
-                self.tick_connection_check()
-        finally:
-            print 'gate server closed'
+            gevent.sleep(self.CONNECTION_CHECK_INTERVAL)
 
     def start_server(self):
         try:
-            self.server_thread = threading.Thread(target=self.loop)
+            threads = [
+                gevent.spawn(self.tick_command),
+                gevent.spawn(self.tick_package),
+                gevent.spawn(self.tick_connection_check)
+            ]
             print 'gate server listening at', self.bind_addr
-            self.server_thread.start()
+            gevent.joinall(threads)
         except Exception, e:
             print e
+        print 'gate server closed'
 
 
 if __name__ == '__main__':
-    import room_server_base
-    # CONFIG.get_room_server_class()
 
     from extensions.tinkr_garage.tinkr_garage_room import TinkrGarageRoom
 
@@ -317,16 +219,14 @@ if __name__ == '__main__':
         def __init__(self, room_server_class, bind_addr, server_name):
             GateServerBase.__init__(self, room_server_class, bind_addr, server_name)
 
-    # rs_class = room_server_base.RoomServerFactory.make_room_server_class(0, 0, 0)
     rs_class = TinkrGarageRoom
     gs = GateServerBase(rs_class)
     gs.start_server()
 
     # spawn fake clients
-    round = 1
-    while round == 0:
+    spawn_fake_clients = False
+    if spawn_fake_clients:
         if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
             time.sleep(15)
             gs.room_servers[0].run_command('spawn_fake_clients', 1)
             round += 1
-    print 'done'
