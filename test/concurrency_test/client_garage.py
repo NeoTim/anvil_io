@@ -174,11 +174,11 @@ def main():
     import threading
     import multiprocessing
 
-    SERVER_IP = '10.26.238.151' # '167.99.169.64'
+    SERVER_IP = '192.168.145.177' # '167.99.169.64'
     SERVER_PORT = 10000
     server_addr = (SERVER_IP, SERVER_PORT)
 
-    NUM_CLIENT = 1000
+    NUM_CLIENT = 1
     for i in range(NUM_CLIENT):
         # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         client_agent = ClientAgent(20000 + i, server_addr)

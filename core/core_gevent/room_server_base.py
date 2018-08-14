@@ -1,7 +1,8 @@
 from command_server import *
 import time
 from struct import *
-import Queue
+
+from gevent.queue import Queue
 
 # room server structs dict
 ROOM_SERVER_STRUCTS = {
@@ -201,7 +202,7 @@ class GameEventManager:
 
     def __init__(self, room_server_ref):
         self.room_server_ref = room_server_ref
-        self.game_event_q = Queue.Queue(5000)
+        self.game_event_q = Queue(5000)
 
     def send_server_event(self, to_cid, evt):
         """ raise server event to client """
@@ -407,13 +408,12 @@ class RoomServerBase(CommandServer):
         """
         while True:
             try:
-                print 'tick event'
                 evt = self.game_event_manager.game_event_q.get()
                 self.game_event_manager.handle_event(evt)
             except Exception, e:
                 print e
                 print 'event error'
-            gevent.sleep(0.01)
+            gevent.sleep(0)
 
     def tick_extra(self):
         pass

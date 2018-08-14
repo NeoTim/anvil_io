@@ -442,6 +442,42 @@ class TinkrGarageRoom(RoomServerBase):
             print 'all clients leaved.'
             self.clear_room()   # TESTING
 
+    def tick_client_state_sync(self):
+        CLIENT_UPDATE_INTERVAL = 1.0 / self.CLIENT_UPDATE_RATE
+        while True:
+            try:
+                data_dict_to_send = {}  # cid => [data to send to this cid, data count]
+                for target_cid in self.client_infos:
+                    grid_x_target_cid = unpack('<h', self.client_infos[target_cid].state.grid_x + '\x00')[0]
+                    grid_y_target_cid = unpack('<h', self.client_infos[target_cid].state.grid_y + '\x00')[0]
+                    data_target_cid = pack('<i', target_cid) + self.pack_client_state(target_cid)
+                    for cid in self.client_infos:
+                        if cid <= target_cid or not self.client_infos[cid].need_update:
+                            continue
+                        # optimization for package size
+                        grid_x_cid = unpack('<h', self.client_infos[cid].state.grid_x + '\x00')[0]
+                        grid_y_cid = unpack('<h', self.client_infos[cid].state.grid_y + '\x00')[0]
+                        # if too far, don't send
+                        if abs(grid_x_target_cid - grid_x_cid) > 60 or abs(grid_y_target_cid - grid_y_cid) > 60:
+                            continue
+                        data_cid = pack('<i', cid) + self.pack_client_state(cid)
+                        if target_cid not in data_dict_to_send:  # if not ever recorded
+                            data_dict_to_send[target_cid] = [data_cid, 1]
+                            data_dict_to_send[cid] = [data_target_cid, 1]
+                        else:
+                            data_dict_to_send[target_cid][0] += data_cid
+                            data_dict_to_send[target_cid][1] += 1
+                            data_dict_to_send[cid][0] += data_target_cid
+                            data_dict_to_send[cid][1] += 1
+                # send state data to clients
+                for target_cid in data_dict_to_send:
+                    data_sent = pack('<i', data_dict_to_send[target_cid][1]) + data_dict_to_send[target_cid][0]
+                    self.gate_server_ref.send_package([target_cid], data_sent, '\x11')
+            except Exception, e:
+                print e
+                print 'sync states error'
+            gevent.sleep(CLIENT_UPDATE_INTERVAL)
+
     @on_client_game_event(EventClientJoinGame)
     def on_client_join_game(self, evt):
 
@@ -729,8 +765,8 @@ class TinkrGarageRoom(RoomServerBase):
                         if self.game_model.storm_pkg_count > 1:   # if not first update, accumulate shrink delay and shrink time
                             storm_span = self.game_model.cur_storm_duration + self.game_model.storm_shrink_delay + self.game_model.storm_shrink_duration
                         if time.time() - self.game_model.last_storm_update_stamp > storm_span:
-                            if time.time() - self.start_stamp < 15:  # TESTING
-                                return
+                            # if time.time() - self.start_stamp < 15:  # TESTING
+                            #     return
                             # counter update
                             self.game_model.storm_pkg_count += 1
                             print 'storm update at time', time.time()

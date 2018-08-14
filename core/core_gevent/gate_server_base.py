@@ -122,6 +122,7 @@ class GateServerBase(CommandServer):
             if at_room >= 0:
                 print 'client', cid, 'requests to quit room', at_room
                 self.room_servers[at_room].run_command('remove_client', cid)
+                self.client_connections[cid].at_room = -1
             else:
                 print 'client', cid, 'not in any room. quit room failed'
         else:

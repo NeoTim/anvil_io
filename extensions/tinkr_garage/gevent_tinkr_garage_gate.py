@@ -14,7 +14,7 @@ class TinkrGateServer(GateServerBase):
             # TODO: make request through api
             response = requests.get(
                 'https://tinkrinc.com/api/checksession?pid=' + str(cid) + '&sessionid=' + str(token),
-                timeout=5
+                timeout=2
             )
             res = json.loads(response.text)
             if res['result'] == 'succeed':
@@ -69,7 +69,7 @@ class TinkrGateServer(GateServerBase):
             print 'room error. no room available'
         else:
             if cid not in self.client_connections:
-                print 'client not logged in'
+                print 'client ', cid, 'not logged in'
             elif self.client_connections[cid].at_room >= 0:
                 print 'client already in room ', self.client_connections[cid].at_room
             else:
@@ -139,8 +139,8 @@ class TinkrGateServer(GateServerBase):
                     return
                 if event_id == '\x08':  # logout
                     # TODO: logout
-                    # print 'logout event'
-                    # self.logout_client(target_cid)
+                    print 'logout event'
+                    self.logout_client(target_cid)
                     return
                 if event_id == '\x00':  # match game request
                     # TODO: move join room to separate package
@@ -167,7 +167,7 @@ if __name__ == '__main__':
     gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
 
     # gs.create_room(0)
-    # gs.room_servers[0].run_command('set_storm_enabling', 0)
+    # gs.room_servers[0].run_command('set_storm_enabling', 1)
 
     gs.start_server()
 
