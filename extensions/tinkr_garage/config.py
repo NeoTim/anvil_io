@@ -1,2 +1,2 @@
 APP_NAME = 'tinkr_garage'
-ROOM_SCRIPT = 'tinkr_garage_room.py'
+SERVER_NAME_IN_LOG = 'gameserver'

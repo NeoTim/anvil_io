@@ -1,5 +1,7 @@
 from core.core_gevent.room_server_base import *
 import random
+from garage_web_api import GarageWebApi
+import garage_util
 
 
 """
@@ -385,8 +387,13 @@ class TinkrGarageRoom(RoomServerBase):
         self.last_ai_update_stamp = 0
 
     def pack_client_state(self, cid):
-        state = self.client_infos[cid].state
-        return pack('<cccchccc', state.grid_x, state.grid_y, state.pos[0], state.pos[1], state.pos[2], state.rot[0], state.rot[1], state.rot[2])
+        try:
+            state = self.client_infos[cid].state
+            return pack('<cccchccc', state.grid_x, state.grid_y, state.pos[0], state.pos[1], state.pos[2], state.rot[0], state.rot[1], state.rot[2])
+        except Exception, e:
+            print 'packing client state error'
+            print e
+        return None
 
     def unpack_client_state(self, pkg_data):
         """
@@ -434,12 +441,12 @@ class TinkrGarageRoom(RoomServerBase):
             pass
 
     def clear_room(self):
-        print 'clear room'
+        garage_util.log_garage('clear room ' + str(self.room_id), True)
         self.game_model.game_model_init()
 
     def post_remove_client(self, cid):
         if len(self.client_infos) == 0:
-            print 'all clients leaved.'
+            garage_util.log_garage('all clients leaved room ' + str(self.room_id) + '.', True)
             self.clear_room()   # TESTING
 
     def tick_client_state_sync(self):
@@ -467,8 +474,14 @@ class TinkrGarageRoom(RoomServerBase):
                         else:
                             data_dict_to_send[target_cid][0] += data_cid
                             data_dict_to_send[target_cid][1] += 1
-                            data_dict_to_send[cid][0] += data_target_cid
-                            data_dict_to_send[cid][1] += 1
+                            if cid not in data_dict_to_send:
+                                data_dict_to_send[cid] = [data_target_cid, 1]
+                            else:
+                                data_dict_to_send[cid][0] += data_target_cid
+                                data_dict_to_send[cid][1] += 1
+                            pass
+                        pass
+                    pass
                 # send state data to clients
                 for target_cid in data_dict_to_send:
                     data_sent = pack('<i', data_dict_to_send[target_cid][1]) + data_dict_to_send[target_cid][0]
@@ -512,7 +525,7 @@ class TinkrGarageRoom(RoomServerBase):
         # update client initial info
         cid = evt.from_cid
         if cid not in self.client_infos:
-            print 'game start failed. client', cid, 'not in room', self.room_id
+            garage_util.log_garage('game start failed. client ' + str(cid) + ' not in room ' + str(self.room_id))
             return
         self.client_infos[cid].state.grid_x = evt.var['grid_x']
         self.client_infos[cid].state.grid_y = evt.var['grid_y']
@@ -596,7 +609,7 @@ class TinkrGarageRoom(RoomServerBase):
         init_damage = evt.var['damage']
         damage = float(init_damage) / 10000
         self.client_infos[hit_cid].state.HP -= damage
-        print 'client', fire_cid, 'hit', hit_cid, ', damage', damage
+        garage_util.log_garage('client ' + str(fire_cid) + ' hit ' + str(hit_cid) + ', damage ' + str(damage), True)
         evt_damage = EventServerDamage()
         evt_damage.from_cid = hit_cid
         evt_damage.var['fire_cid'] = fire_cid
@@ -607,7 +620,7 @@ class TinkrGarageRoom(RoomServerBase):
         # TODO: centralize death event
         if not self.client_infos[hit_cid].state.is_dead and self.client_infos[hit_cid].state.HP <= 0:
             self.client_infos[hit_cid].state.is_dead = True
-            print 'client', hit_cid, 'dead'
+            garage_util.log_garage('client ' + str(hit_cid) + ' dead', True)
             evt_death = EventServerPlayerDeath()
             evt_death.from_cid = hit_cid
             evt_death.var['killed_cid'] = hit_cid
@@ -617,7 +630,7 @@ class TinkrGarageRoom(RoomServerBase):
     @on_client_game_event(EventClientPickUpWeapon)
     def on_client_pick_up_weapon(self, evt):
         # pick up weapon event
-        print 'pick up weapon event'
+        garage_util.log_garage('pick up weapon event')
         weapon_id = evt.var['weapon_id']
         weapon_type = evt.var['weapon_type']
         equip_slot = evt.var['equip_slot']
@@ -682,8 +695,27 @@ class TinkrGarageRoom(RoomServerBase):
             hp += evt.var['heal_val']
             if hp > 100:
                 hp = 100
-            print 'client', from_cid, 'healed to', hp
             self.client_infos[from_cid].state.HP = hp
+            garage_util.log_garage('client ' + str(from_cid) + ' healed to ' + str(hp), True)
+
+    def add_client(self, cid):
+        if cid not in self.client_infos:
+            new_client_state = self.ClientState()   # ROOM_SERVER_STRUCTS['client_state']()
+            new_client_info = self.ClientInfo(new_client_state)
+            self.client_infos[cid] = new_client_info
+            garage_util.log_garage('client ' + str(cid) + ' entered room ' + str(self.room_id), True)
+            self.post_add_client(cid)      # TESTING
+        else:
+            garage_util.log_garage('client ' + str(cid) + ' already in room ' + str(self.room_id))
+
+    def remove_client(self, cid):
+        if cid in self.client_infos:
+            self.client_infos.pop(cid, None)
+            garage_util.log_garage('client ' + str(cid) + ' leaves room ' + str(self.room_id), True)
+            # TESTING
+            self.post_remove_client(cid)
+        else:
+            garage_util.log_garage('client ' + str(cid) + ' not in room ' + str(self.room_id) + '. no client removed from room')
 
     def tick_extra(self):
         """
@@ -713,7 +745,11 @@ class TinkrGarageRoom(RoomServerBase):
                                     self.game_model.cur_storm_center[1] = self.game_model.next_storm_center[1]
                                     self.game_model.cur_storm_radius = self.game_model.next_storm_radius
                                     self.game_model.storm_shrink_start_stamp = -1
-                                    print 'shrinking done. current radius', self.game_model.cur_storm_radius, 'current center', self.game_model.cur_storm_center[0], self.game_model.cur_storm_center[1]
+                                    garage_util.log_garage('shrinking done. current radius ' +
+                                                           str(self.game_model.cur_storm_radius) +
+                                                           ' current center ' +
+                                                           str(self.game_model.cur_storm_center[0]) +
+                                                           ', ' + str(self.game_model.cur_storm_center[1]))
                                 else:
                                     alpha = shrink_time / self.game_model.storm_shrink_duration
                                     self.game_model.cur_storm_center[0] = (1 - alpha) * self.game_model.prev_storm_center[0] + alpha * self.game_model.next_storm_center[0]
@@ -754,7 +790,7 @@ class TinkrGarageRoom(RoomServerBase):
                                         # TODO: centralize death event
                                         if not self.client_infos[cid].state.is_dead and self.client_infos[cid].state.HP <= 0:
                                             self.client_infos[cid].state.is_dead = True
-                                            print 'client', cid, 'dead'
+                                            garage_util.log_garage('client ' + str(cid) + ' dead', True)
                                             evt_death = EventServerPlayerDeath()
                                             evt_death.from_cid = cid
                                             evt_death.var['killed_cid'] = cid
@@ -855,10 +891,10 @@ class TinkrGarageRoom(RoomServerBase):
     def set_storm_enabling(self, storm_flag):
         if storm_flag == 0:
             self.game_model.ENABLE_STORM = False
-            print 'storm disabled for room', self.room_id
+            garage_util.log_garage('storm disabled for room ' + str(self.room_id), True)
         else:
             self.game_model.ENABLE_STORM = True
-            print 'storm enabled for room', self.room_id
+            garage_util.log_garage('storm enabled for room ' + str(self.room_id), True)
 
 
 if __name__ == '__main__':

@@ -111,7 +111,7 @@ class GateServerBase(CommandServer):
             elif self.client_connections[cid].at_room >= 0:
                 print 'client already in room ', self.client_connections[cid].at_room
             else:
-                print 'pass client', cid, 'to room', room_id
+                print 'pass client ', cid, ' to room', room_id
                 target_room.run_command('add_client', cid)
                 self.client_connections[cid].at_room = room_id
 
@@ -120,13 +120,13 @@ class GateServerBase(CommandServer):
         if cid in self.client_connections:
             at_room = self.client_connections[cid].at_room
             if at_room >= 0:
-                print 'client', cid, 'requests to quit room', at_room
+                print 'client ', cid, ' requests to quit room', at_room
                 self.room_servers[at_room].run_command('remove_client', cid)
                 self.client_connections[cid].at_room = -1
             else:
-                print 'client', cid, 'not in any room. quit room failed'
+                print 'client ', cid, ' not in any room. quit room failed'
         else:
-            print 'client', cid, 'not logged in. quit room failed'
+            print 'client ', cid, ' not logged in. quit room failed'
 
     @on_command('send_package')
     def send_package(self, to_cids, pkg_data, op_code):
@@ -149,7 +149,7 @@ class GateServerBase(CommandServer):
                 d_len = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
                 # TESTING
                 if op_code != '\x11':   # if not state
-                    print d_len, 'bytes sent to', remote_ip, remote_port
+                    tkutil.log(str(d_len) + ' bytes sent to ' + remote_ip + str(remote_port))
             else:
                 # print 'client', to_cid, 'not connected. no data sent'
                 pass
@@ -191,11 +191,11 @@ class GateServerBase(CommandServer):
             # detect if the client connection is timed out
             for cid in [ccid for ccid in self.client_connections]:
                 if time.time() - self.client_connections[cid].last_package_time > ClientConnection.MAX_NO_RESPONSE:
-                    print 'timeout. client', cid, 'connection closed'
+                    tkutil.log('timeout. client ' + str(cid) + ' connection closed')
                     self.logout_client(cid)
             # TESTING
             for rid in self.room_servers:
-                print 'room', rid, 'has', len(self.room_servers[rid].client_infos), 'clients'
+                tkutil.log('room ' + str(rid) + ' has ' + str(len(self.room_servers[rid].client_infos)) + ' clients')
             gevent.sleep(self.CONNECTION_CHECK_INTERVAL)
 
     def start_server(self):
@@ -205,11 +205,11 @@ class GateServerBase(CommandServer):
                 gevent.spawn(self.tick_package),
                 gevent.spawn(self.tick_connection_check)
             ]
-            print 'gate server listening at', self.bind_addr
+            tkutil.log('gate server listening at ' + str(self.bind_addr))
             gevent.joinall(threads)
         except Exception, e:
             print e
-        print 'gate server closed'
+        tkutil.log('gate server closed')
 
 
 if __name__ == '__main__':

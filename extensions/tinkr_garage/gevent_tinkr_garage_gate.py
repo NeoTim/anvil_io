@@ -3,44 +3,33 @@ from struct import *
 import core.tkutil as tkutil
 import requests
 import json
+import threading
+from garage_web_api import GarageWebApi
+import garage_util
 
 
 class TinkrGateServer(GateServerBase):
     def __init__(self, room_server_class, bind_addr, server_name):
         GateServerBase.__init__(self, room_server_class, bind_addr, server_name)
-
-    def authenticate_client(self, cid, token):
-        try:
-            # TODO: make request through api
-            response = requests.get(
-                'https://tinkrinc.com/api/checksession?pid=' + str(cid) + '&sessionid=' + str(token),
-                timeout=2
-            )
-            res = json.loads(response.text)
-            if res['result'] == 'succeed':
-                return True
-            return False
-        except requests.exceptions.Timeout, e:
-            print 'web server timed out.'
-        return False
+        self.log_server_name = 'gameserver'     # server name registerd in log server
 
     def login_client(self, cid, token, remote_ip, remote_port):
         res_code = '\x00'
         if cid not in self.client_connections:
             # TESTING
-            login_success = self.authenticate_client(cid, token)
+            login_success = GarageWebApi.check_session(cid, token)
             if login_success:
                 new_connection = ClientConnection(remote_ip, remote_port)
                 self.client_connections[cid] = new_connection
                 res_code = '\x00'   # 00 == login success
-                print 'client', cid, 'login success'
+                garage_util.log_garage('client ' + str(cid) + ' login success' % cid, True)
                 # self.post_login_client(cid)  # after login action
             else:
                 res_code = '\x01'   # 01 == authorization failed
-                print 'client', cid, 'info not correct. login failed'
+                garage_util.log_garage('client ' + str(cid) + ' info not correct. login failed', True)
         else:
             res_code = '\x02'   # 02 == login conflict
-            print 'client', cid, 'already logged in'
+            garage_util.log_garage('client ' + str(cid) + ' already logged in')
         pkg_data = pack(
             '<ciicc',
             '\x12',
@@ -50,7 +39,32 @@ class TinkrGateServer(GateServerBase):
             res_code,
         )
         dlen = self.net_communicator.send_data(pkg_data, remote_ip, remote_port)
-        print dlen, 'sent'
+        garage_util.log_garage(str(dlen) + ' sent')
+
+    def logout_client(self, cid):
+        self.pre_logout_client(cid)  # before logout actions
+        if cid in self.client_connections:
+            at_room = self.client_connections[cid].at_room
+            if at_room >= 0:
+                self.quit_room(cid)
+            self.client_connections.pop(cid, None)
+            garage_util.log_garage('client ' + str(cid) + ' logged out', True)
+        else:
+            garage_util.log_garage('client ' + str(cid) + ' not logged in. logout failed')
+
+    def create_room(self, rid=None):
+        res_rid = 0
+        if rid and rid >= 0:
+            res_rid = rid
+        while res_rid in self.room_servers:
+            res_rid += 1
+        new_room_server = self.room_server_class(self, res_rid)
+        self.room_servers[rid] = new_room_server
+        garage_util.log_garage('room' + str(res_rid) + 'created', True)
+        # run room server
+        room_thread = threading.Thread(target=new_room_server.start_server)
+        room_thread.start()
+        return new_room_server
 
     def assign_room(self, cid, pkg, rid=-1):
         room_id = 0     # default room id
@@ -66,20 +80,32 @@ class TinkrGateServer(GateServerBase):
         else:
             target_room = self.room_servers[room_id]
         if not target_room:
-            print 'room error. no room available'
+            garage_util.log_garage('room error. no room available')
         else:
             if cid not in self.client_connections:
-                print 'client ', cid, 'not logged in'
+                garage_util.log_garage('client ' + str(cid) + ' not logged in')
             elif self.client_connections[cid].at_room >= 0:
-                print 'client already in room ', self.client_connections[cid].at_room
+                garage_util.log_garage('client ' + str(cid) + ' already in room ' + str(self.client_connections[cid].at_room), True)
             else:
-                print 'pass client', cid, 'to room', room_id
+                garage_util.log_garage('pass client ' + str(cid) + ' to room' + str(room_id))
                 target_room.run_command('add_client', cid)
                 self.client_connections[cid].at_room = room_id
 
+    def quit_room(self, cid):
+        if cid in self.client_connections:
+            at_room = self.client_connections[cid].at_room
+            if at_room >= 0:
+                garage_util.log_garage('client ' + str(cid) + ' requests to quit room' + str(at_room))
+                self.room_servers[at_room].run_command('remove_client', cid)
+                self.client_connections[cid].at_room = -1
+            else:
+                garage_util.log_garage('client ' + str(cid) + ' not in any room. quit room failed')
+        else:
+            garage_util.log_garage('client ' + str(cid) + ' not logged in. quit room failed')
+
     def parse_token(self, pkg_data):
         token = unpack('<i', pkg_data[14:18])[0]
-        print 'get session', token
+        garage_util.log_garage('get session' + token)
         return token
 
     def solve_package(self, pkg):
@@ -98,9 +124,7 @@ class TinkrGateServer(GateServerBase):
             # TODO: move login handling to admin package
             if op_code == '\x12':   # event
                 event_id = unpack('<c', data[9:10])[0]
-                # print 'event id', unpack('<h', event_id + '\x00')[0]
                 if event_id == '\x06':  # ping
-                    print 'ping event'
                     # TESTING
                     if target_cid in self.client_connections:
                         ping_start = unpack('<i', data[1:5])[0]
@@ -113,17 +137,16 @@ class TinkrGateServer(GateServerBase):
                             ping_start
                         )
                         dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                        print dlen, 'sent'
                     else:
-                        print 'no echo for not logged in clients'
+                        garage_util.log_garage('no echo for not logged in client' + str(target_cid))
                     return
                 if event_id == '\x07':   # login
-                    print 'login event'
+                    garage_util.log_garage('login event')
                     token = self.parse_token(data)
                     self.login_client(target_cid, token, addr[0], addr[1])
                     return
                 if event_id == '\x0b':  # re-login
-                    print 're-login event'
+                    garage_util.log_garage('re-login event')
                     relogin_res = '\x00'    # 00 == ok
                     if target_cid in self.client_connections:
                         pkg_data = pack(
@@ -135,18 +158,17 @@ class TinkrGateServer(GateServerBase):
                             relogin_res
                         )
                         dlen = self.net_communicator.send_data(pkg_data, addr[0], addr[1])
-                        print dlen, 'sent'
                     return
                 if event_id == '\x08':  # logout
                     # TODO: logout
-                    print 'logout event'
+                    garage_util.log_garage('logout event')
                     self.logout_client(target_cid)
                     return
                 if event_id == '\x00':  # match game request
                     # TODO: move join room to separate package
-                    print 'join room event'
+                    garage_util.log_garage('join room event')
                     desired_rid = unpack('<i', data[14:18])[0]
-                    print 'desired room id', desired_rid
+                    garage_util.log_garage('desired room id' + str(desired_rid))
                     self.assign_room(target_cid, pkg, desired_rid)
 
             # pass to room if necessary (game event)
@@ -166,15 +188,14 @@ if __name__ == '__main__':
     rs_class = TinkrGarageRoom
     gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
 
-    # gs.create_room(0)
-    # gs.room_servers[0].run_command('set_storm_enabling', 1)
+    gs.create_room(0)
+    gs.room_servers[0].run_command('set_storm_enabling', 0)
 
     gs.start_server()
 
     # spawn fake clients
     spawn_fake_clients = False
     if spawn_fake_clients:
-        if 0 in gs.room_servers and round == 0 and len(gs.room_servers[0].client_infos) > 0:
-            time.sleep(15)
+        if 666 in gs.room_servers:  # and len(gs.room_servers[666].client_infos) > 0:
+            time.sleep(10)
             gs.room_servers[0].run_command('spawn_fake_clients', 1)
-            round += 1

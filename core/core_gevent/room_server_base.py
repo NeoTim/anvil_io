@@ -1,6 +1,7 @@
 from command_server import *
 import time
 from struct import *
+import core.tkutil as tkutil
 
 from gevent.queue import Queue
 
@@ -217,9 +218,6 @@ class GameEventManager:
             if target_cid not in exclude:
                 target_cids.append(target_cid)
         data_to_send = pack('<ic', evt.from_cid, evt.event_id) + evt.pack()
-        # TESTING
-        # if evt.event_id == '\x09':
-        #     print 'radius sent:', unpack('<i', data_to_send[9:13])[0]
         self.room_server_ref.gate_server_ref.send_package(target_cids, data_to_send, '\x12')
 
     def handle_event(self, evt):
@@ -227,14 +225,14 @@ class GameEventManager:
         if isinstance(evt, ClientGameEvent):
             evt_class = evt.__class__
             if evt_class.event_id in self.CLIENT_GAME_EVENTS:
-                print 'handle client event "' + evt_class.__name__ + '"'
+                tkutil.log('handle client event "' + evt_class.__name__ + '"')
                 self.CLIENT_GAME_EVENTS[evt_class.event_id][1](self.room_server_ref, evt)
             else:
                 print 'event "' + evt_class.__name__ + '" not found'
         elif isinstance(evt, ServerGameEvent):
             evt_class = evt.__class__
             if evt_class.event_id in self.SERVER_GAME_EVENTS:
-                print 'handle server event "' + evt_class.__name__ + '"'
+                tkutil.log('handle server event "' + evt_class.__name__ + '"')
                 self.SERVER_GAME_EVENTS[evt_class.event_id][1](self.room_server_ref, evt)
             else:
                 print 'event "' + evt_class.__name__ + '" not found'
