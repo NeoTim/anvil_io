@@ -88,7 +88,7 @@ class GateServerBase(CommandServer):
             res_rid += 1
         new_room_server = self.room_server_class(self, res_rid)
         self.room_servers[rid] = new_room_server
-        print 'room', res_rid, 'created'
+        print 'room ', res_rid, ' created'
         # run room server
         room_thread = threading.Thread(target=new_room_server.start_server)
         room_thread.start()

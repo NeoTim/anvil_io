@@ -22,7 +22,7 @@ class TinkrGateServer(GateServerBase):
                 new_connection = ClientConnection(remote_ip, remote_port)
                 self.client_connections[cid] = new_connection
                 res_code = '\x00'   # 00 == login success
-                garage_util.log_garage('client ' + str(cid) + ' login success' % cid, True)
+                garage_util.log_garage('client ' + str(cid) + ' login success', True)
                 # self.post_login_client(cid)  # after login action
             else:
                 res_code = '\x01'   # 01 == authorization failed
@@ -60,7 +60,7 @@ class TinkrGateServer(GateServerBase):
             res_rid += 1
         new_room_server = self.room_server_class(self, res_rid)
         self.room_servers[rid] = new_room_server
-        garage_util.log_garage('room' + str(res_rid) + 'created', True)
+        garage_util.log_garage('room ' + str(res_rid) + ' created', True)
         # run room server
         room_thread = threading.Thread(target=new_room_server.start_server)
         room_thread.start()
@@ -87,7 +87,7 @@ class TinkrGateServer(GateServerBase):
             elif self.client_connections[cid].at_room >= 0:
                 garage_util.log_garage('client ' + str(cid) + ' already in room ' + str(self.client_connections[cid].at_room), True)
             else:
-                garage_util.log_garage('pass client ' + str(cid) + ' to room' + str(room_id))
+                garage_util.log_garage('pass client ' + str(cid) + ' to room ' + str(room_id))
                 target_room.run_command('add_client', cid)
                 self.client_connections[cid].at_room = room_id
 
@@ -95,7 +95,7 @@ class TinkrGateServer(GateServerBase):
         if cid in self.client_connections:
             at_room = self.client_connections[cid].at_room
             if at_room >= 0:
-                garage_util.log_garage('client ' + str(cid) + ' requests to quit room' + str(at_room))
+                garage_util.log_garage('client ' + str(cid) + ' requests to quit room ' + str(at_room))
                 self.room_servers[at_room].run_command('remove_client', cid)
                 self.client_connections[cid].at_room = -1
             else:
@@ -105,7 +105,7 @@ class TinkrGateServer(GateServerBase):
 
     def parse_token(self, pkg_data):
         token = unpack('<i', pkg_data[14:18])[0]
-        garage_util.log_garage('get session' + token)
+        garage_util.log_garage('get session ' + str(token))
         return token
 
     def solve_package(self, pkg):
