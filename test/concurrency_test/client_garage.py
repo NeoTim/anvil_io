@@ -219,11 +219,11 @@ def main():
     import threading
     import multiprocessing
 
-    SERVER_IP = '192.168.145.39'  # '167.99.169.64'
+    SERVER_IP = '167.99.169.64'
     SERVER_PORT = 10000
     server_addr = (SERVER_IP, SERVER_PORT)
 
-    NUM_CLIENT = 70  # number of AI to spawn
+    NUM_CLIENT = 50  # number of AI to spawn
     TARGET_ROOM_ID = 666    # target room id, -1 == auto
     for i in range(NUM_CLIENT):
         # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

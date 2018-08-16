@@ -20,9 +20,10 @@ class GarageWebApi:
                 cls.SERVER_IP + 'checksession?pid=' + str(cid) + '&sessionid=' + str(token),
                 timeout=2
             )
-            res = json.loads(response.text)
-            if res['result'] == 'succeed':
-                return True
+            if response and response.text:
+                res = json.loads(response.text)
+                if res['result'] == 'succeed':
+                    return True
             return False
         except requests.exceptions.Timeout, e:
             print 'web server timed out.'
