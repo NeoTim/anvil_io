@@ -36,7 +36,7 @@ class GarageWebApi:
                 data=json.dumps({
                     'serverName': server_name,
                     'content': log_content,
-                    'timestamp': str(timestamp)
+                    'timestamp': timestamp
                 }, encoding='utf-8'),
                 timeout=2
             )
@@ -58,5 +58,5 @@ if __name__ == '__main__':
     print str(('45', 343))
 
     web_api = GarageWebApi()
-    # web_api.SERVER_IP = 'http://192.168.145.216:4000/api/'
-    # web_api.push_log('gameserver', 'test_log', time.time())
+    # web_api.SERVER_IP = 'http://192.168.145.41:4000/api/'
+    # web_api.push_log('serverlog', 'test_log2', int(time.time()))

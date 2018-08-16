@@ -187,6 +187,7 @@ class GateServerBase(CommandServer):
         """
         coroutine = check client timeout
         """
+        room_stat_display_stamp = 0
         while True:
             # detect if the client connection is timed out
             for cid in [ccid for ccid in self.client_connections]:
@@ -194,8 +195,10 @@ class GateServerBase(CommandServer):
                     tkutil.log('timeout. client ' + str(cid) + ' connection closed')
                     self.logout_client(cid)
             # TESTING
-            for rid in self.room_servers:
-                tkutil.log('room ' + str(rid) + ' has ' + str(len(self.room_servers[rid].client_infos)) + ' clients')
+            if time.time() - room_stat_display_stamp > 10:
+                room_stat_display_stamp = time.time()
+                for rid in self.room_servers:
+                    tkutil.log('room ' + str(rid) + ' has ' + str(len(self.room_servers[rid].client_infos)) + ' clients')
             gevent.sleep(self.CONNECTION_CHECK_INTERVAL)
 
     def start_server(self):

@@ -34,12 +34,13 @@ class ClientAgent(Thread):
         IN_ROOM = 2
         GAME_RUNNING = 3
 
-    def __init__(self, cid, sever_addr):
+    def __init__(self, cid, sever_addr, target_room_id):
         Thread.__init__(self)
         self.agent_state = self.AgentState.NOT_LOGGED_IN
         self.cid = cid
         self.sock = None
         self.server_addr = sever_addr
+        self.target_room_id = target_room_id
         self.client_state = ClientState()
         self.init_client_state()
 
@@ -63,7 +64,7 @@ class ClientAgent(Thread):
             if i == 3:
                 self.client_state.pos[1] = packed_val
             if i == 4:
-                self.client_state.pos[2] = 15000
+                self.client_state.pos[2] = 10000
 
     def login(self):
         print 'client', self.cid, 'login requested'
@@ -145,6 +146,14 @@ class ClientAgent(Thread):
         grid_y = unpack('<h', self.client_state.grid_xy[1] + '\x00')[0]
         grid_x += random.randint(-1, 1)
         grid_y += random.randint(-1, 1)
+        if grid_x > 140:
+            grid_x = 140
+        if grid_x < 80:
+            grid_x = 80
+        if grid_y > 140:
+            grid_y = 140
+        if grid_y < 80:
+            grid_y = 80
         self.client_state.grid_xy[0] = pack('<h', grid_x)[0]
         self.client_state.grid_xy[1] = pack('<h', grid_y)[0]
 
@@ -161,7 +170,7 @@ class ClientAgent(Thread):
             if self.agent_state == self.AgentState.LOGGED_IN:
                 if time.time() - self.last_join_game_request_time > self.JOIN_GAME_REQUEST_WAIT:
                     self.last_join_game_request_time = time.time()
-                    self.join_game()
+                    self.join_game(self.target_room_id)
                 if time.time() - self.last_ping_time > 1.0 / self.PING_RATE:
                     self.ping()
                     self.last_ping_time = time.time()
@@ -173,7 +182,7 @@ class ClientAgent(Thread):
                 if time.time() - self.last_send_state_time > 1.0 / self.STATE_SEND_RATE:
                     self.send_state()
                     self.last_send_state_time = time.time()
-                # self.tick_game_logic()
+                self.tick_game_logic()
 
             # recv data
             try:
@@ -210,14 +219,15 @@ def main():
     import threading
     import multiprocessing
 
-    SERVER_IP = '192.168.145.222'  # '167.99.169.64'
+    SERVER_IP = '192.168.145.39'  # '167.99.169.64'
     SERVER_PORT = 10000
     server_addr = (SERVER_IP, SERVER_PORT)
 
-    NUM_CLIENT = 10
+    NUM_CLIENT = 70  # number of AI to spawn
+    TARGET_ROOM_ID = 666    # target room id, -1 == auto
     for i in range(NUM_CLIENT):
         # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        client_agent = ClientAgent(0 + i, server_addr)
+        client_agent = ClientAgent(0 + i, server_addr, TARGET_ROOM_ID)
         client_agent.start()
         time.sleep(0.01)
 

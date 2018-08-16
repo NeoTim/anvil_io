@@ -188,14 +188,15 @@ if __name__ == '__main__':
     rs_class = TinkrGarageRoom
     gs = TinkrGateServer(rs_class, ('0.0.0.0', 10000), 'tinkr_garage_gate')
 
-    gs.create_room(0)
-    gs.room_servers[0].run_command('set_storm_enabling', 0)
+    gs.create_room(666)
+    gs.room_servers[666].run_command('set_storm_enabling', 0)
 
-    gs.start_server()
+    threading.Thread(target=gs.start_server).start()
 
     # spawn fake clients
     spawn_fake_clients = False
-    if spawn_fake_clients:
+    while spawn_fake_clients:
         if 666 in gs.room_servers:  # and len(gs.room_servers[666].client_infos) > 0:
             time.sleep(10)
-            gs.room_servers[0].run_command('spawn_fake_clients', 1)
+            gs.room_servers[666].run_command('spawn_fake_clients', 10)
+            break
