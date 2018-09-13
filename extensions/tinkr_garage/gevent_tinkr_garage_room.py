@@ -2,6 +2,7 @@ from core.core_gevent.room_server_base import *
 import random
 from garage_web_api import GarageWebApi
 import garage_util
+from room_config import *
 
 
 """
@@ -315,7 +316,7 @@ class TinkrGarageRoom(RoomServerBase):
 
             self.last_storm_damage_stamp = time.time()      # damage calc timer stamp
 
-            self.ENABLE_STORM = True    # flag of storm enabling
+            self.ENABLE_STORM = DEFAULT_STORM_ENALBED    # flag of storm enabling
 
             # init weapons
             # weapon_id => weapon
