@@ -445,7 +445,7 @@ class TinkrGarageRoom(RoomServerBase):
 
     def post_remove_client(self, cid):
         if len(self.client_infos) == 0:
-            print 'all clients leaved.'
+            print 'all clients left room.'
             self.clear_room()   # TESTING
 
     @on_client_game_event(EventClientJoinGame)

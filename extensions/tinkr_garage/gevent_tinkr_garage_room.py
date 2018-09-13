@@ -446,7 +446,7 @@ class TinkrGarageRoom(RoomServerBase):
 
     def post_remove_client(self, cid):
         if len(self.client_infos) == 0:
-            garage_util.log_garage('all clients leaved room ' + str(self.room_id) + '.', True)
+            garage_util.log_garage('all clients left room ' + str(self.room_id) + '.', True)
             self.clear_room()   # TESTING
 
     def tick_client_state_sync(self):
