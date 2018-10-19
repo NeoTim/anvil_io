@@ -638,10 +638,10 @@ class TinkrGarageRoom(RoomServerBase):
 
         # TODO: add real check
         pick_success = True
-        if weapon_id not in self.game_model.weapons:
-            print 'wid', weapon_id, 'wtype', weapon_type
-            print 'pick up weapon failed'
-            pick_success = False
+#        if weapon_id not in self.game_model.weapons:
+#            print 'wid', weapon_id, 'wtype', weapon_type
+#            print 'pick up weapon failed'
+#            pick_success = False
 
         if pick_success:
 
@@ -659,7 +659,7 @@ class TinkrGarageRoom(RoomServerBase):
             self.game_event_manager.send_server_event(evt.from_cid, evt_pick_up_weapon)
 
             # remove weapon
-            self.game_model.weapons.pop(weapon_id)
+#            self.game_model.weapons.pop(weapon_id)
 
             # equip weapon event
             # evt_equip_weapon = EventServerEquipWeapon()
