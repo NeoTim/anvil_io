@@ -1,6 +1,6 @@
 from garage_web_api import GarageWebApi
 import time
-import core.tkutil as tkutil
+import lib.tkutil as tkutil
 import config
 
 

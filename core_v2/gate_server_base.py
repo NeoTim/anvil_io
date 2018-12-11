@@ -4,7 +4,7 @@ from net_communicator import NetCommunicator
 import socket
 from struct import *
 import time
-import core.tkutil as tkutil
+import lib.tkutil as tkutil
 import threading
 
 import gevent

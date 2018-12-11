@@ -1,6 +1,6 @@
-from core.core_gevent.gate_server_base import GateServerBase, ClientConnection
+from core_v2.gate_server_base import GateServerBase, ClientConnection
 from struct import *
-import core.tkutil as tkutil
+from lib.tkutil import get_current_millisecond_clamped
 import requests
 import json
 import threading
@@ -22,18 +22,18 @@ class TinkrGateServer(GateServerBase):
                 new_connection = ClientConnection(remote_ip, remote_port)
                 self.client_connections[cid] = new_connection
                 res_code = '\x00'   # 00 == login success
-                garage_util.log_garage('client ' + str(cid) + ' login success', True)
+                garage_util.log_garage('Player ' + str(cid) + ' login success', True)
                 # self.post_login_client(cid)  # after login action
             else:
                 res_code = '\x01'   # 01 == authorization failed
-                garage_util.log_garage('client ' + str(cid) + ' info not correct. login failed', True)
+                garage_util.log_garage('Player ' + str(cid) + ' info not correct. login failed', True)
         else:
             res_code = '\x02'   # 02 == login conflict
-            garage_util.log_garage('client ' + str(cid) + ' already logged in')
+            garage_util.log_garage('Player ' + str(cid) + ' already logged in')
         pkg_data = pack(
             '<ciicc',
             '\x12',
-            tkutil.get_current_millisecond_clamped(),
+            get_current_millisecond_clamped(),
             cid,
             '\x0a',  # \x0a == server login result event
             res_code,
@@ -131,7 +131,7 @@ class TinkrGateServer(GateServerBase):
                         pkg_data = pack(
                             '<ciici',
                             '\x12',
-                            tkutil.get_current_millisecond_clamped(),
+                            get_current_millisecond_clamped(),
                             target_cid,
                             '\x08',
                             ping_start
@@ -152,7 +152,7 @@ class TinkrGateServer(GateServerBase):
                         pkg_data = pack(
                             '<ciicc',
                             '\x12',
-                            tkutil.get_current_millisecond_clamped(),
+                            get_current_millisecond_clamped(),
                             target_cid,
                             '\x0d',
                             relogin_res
@@ -179,7 +179,7 @@ class TinkrGateServer(GateServerBase):
 
         elif op_code <= '\x2f':  # sys info package
             pass
-
+'''
 if __name__ == '__main__':
 
     from gevent_tinkr_garage_room import TinkrGarageRoom
@@ -200,3 +200,4 @@ if __name__ == '__main__':
             time.sleep(10)
             gs.room_servers[666].run_command('spawn_fake_clients', 10)
             break
+'''

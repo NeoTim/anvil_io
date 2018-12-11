@@ -7,17 +7,16 @@ import config
 
 class GarageWebApi:
 
-    SERVER_IP = 'https://tinkrinc.com/api/'
-
-    def __init__(self):
-        pass
-
     @classmethod
     def check_session(cls, cid, token):
+        if config.CHECK_SESSION is False:
+            # Pretending all is well
+            return True
         # check whether the client was logged in
+        api_url = config.WEB_SERVER_API
         try:
             response = requests.get(
-                cls.SERVER_IP + 'checksession?pid=' + str(cid) + '&sessionid=' + str(token),
+                api_url + 'checksession?pid=' + str(cid) + '&sessionid=' + str(token),
                 timeout=2
             )
             if response and response.text:
@@ -31,9 +30,10 @@ class GarageWebApi:
 
     @classmethod
     def push_log(cls, server_name, log_content, timestamp):
+        api_url = config.WEB_SERVER_API
         try:
             res = requests.post(
-                url=cls.SERVER_IP + 'updatelog',
+                url = api_url + 'updatelog',
                 data=json.dumps({
                     'serverName': server_name,
                     'content': log_content,

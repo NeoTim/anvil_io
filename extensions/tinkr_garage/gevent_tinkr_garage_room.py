@@ -1,4 +1,4 @@
-from core.core_gevent.room_server_base import *
+from core_v2.room_server_base import *
 import random
 from garage_web_api import GarageWebApi
 import garage_util
@@ -466,8 +466,9 @@ class TinkrGarageRoom(RoomServerBase):
                         grid_x_cid = unpack('<h', self.client_infos[cid].state.grid_x + '\x00')[0]
                         grid_y_cid = unpack('<h', self.client_infos[cid].state.grid_y + '\x00')[0]
                         # if too far, don't send
-                        if abs(grid_x_target_cid - grid_x_cid) > 60 or abs(grid_y_target_cid - grid_y_cid) > 60:
-                            continue
+                        # WE do not have lots of users + BUG: the client cannot handle it properly
+                        #if abs(grid_x_target_cid - grid_x_cid) > 60 or abs(grid_y_target_cid - grid_y_cid) > 60:
+                        #    continue
                         data_cid = pack('<i', cid) + self.pack_client_state(cid)
                         if target_cid not in data_dict_to_send:  # if not ever recorded
                             data_dict_to_send[target_cid] = [data_cid, 1]
@@ -897,7 +898,7 @@ class TinkrGarageRoom(RoomServerBase):
             self.game_model.ENABLE_STORM = True
             garage_util.log_garage('storm enabled for room ' + str(self.room_id), True)
 
-
+'''
 if __name__ == '__main__':
     rs = TinkrGarageRoom(None, 3, 'hh')
     rs.start_server()
@@ -916,3 +917,4 @@ if __name__ == '__main__':
     print data
     evt = evt.unpack(data)
     print evt.var
+'''

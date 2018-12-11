@@ -1,7 +1,7 @@
 from command_server import *
 import time
 from struct import *
-import core.tkutil as tkutil
+import lib.tkutil as tkutil
 
 from gevent.queue import Queue
 

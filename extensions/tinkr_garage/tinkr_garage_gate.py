@@ -1,7 +1,7 @@
 from core.gate_server_base import GateServerBase
 from core.gate_server_base import ClientConnection
 from struct import *
-import core.tkutil as tkutil
+import lib.tkutil as tkutil
 import requests
 import json
 
@@ -159,7 +159,7 @@ class TinkrGateServer(GateServerBase):
                     return
                 if event_id == '\x08':  # logout
                     # print 'logout event'
-                    # self.logout_client(target_cid)
+                    self.logout_client(target_cid)
                     return
                 if event_id == '\x00':  # match game request
                     # TODO: move join room to separate package
