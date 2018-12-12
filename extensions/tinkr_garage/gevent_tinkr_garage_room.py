@@ -460,30 +460,33 @@ class TinkrGarageRoom(RoomServerBase):
                     grid_y_target_cid = unpack('<h', self.client_infos[target_cid].state.grid_y + '\x00')[0]
                     data_target_cid = pack('<i', target_cid) + self.pack_client_state(target_cid)
                     for cid in self.client_infos:
-                        if cid <= target_cid or not self.client_infos[cid].need_update:
+                        if cid <= target_cid:
                             continue
+
                         # optimization for package size
-                        grid_x_cid = unpack('<h', self.client_infos[cid].state.grid_x + '\x00')[0]
-                        grid_y_cid = unpack('<h', self.client_infos[cid].state.grid_y + '\x00')[0]
+                        #grid_x_cid = unpack('<h', self.client_infos[cid].state.grid_x + '\x00')[0]
+                        #grid_y_cid = unpack('<h', self.client_infos[cid].state.grid_y + '\x00')[0]
                         # if too far, don't send
                         # WE do not have lots of users + BUG: the client cannot handle it properly
                         #if abs(grid_x_target_cid - grid_x_cid) > 60 or abs(grid_y_target_cid - grid_y_cid) > 60:
                         #    continue
                         data_cid = pack('<i', cid) + self.pack_client_state(cid)
-                        if target_cid not in data_dict_to_send:  # if not ever recorded
-                            data_dict_to_send[target_cid] = [data_cid, 1]
-                            data_dict_to_send[cid] = [data_target_cid, 1]
-                        else:
-                            data_dict_to_send[target_cid][0] += data_cid
-                            data_dict_to_send[target_cid][1] += 1
+
+                        # update_client_state() will alter the value of need_update
+                        if self.client_infos[cid].need_update:
+                            if target_cid not in data_dict_to_send:  # if not ever recorded
+                                data_dict_to_send[target_cid] = [data_cid, 1]
+                            else:
+                                data_dict_to_send[target_cid][0] += data_cid
+                                data_dict_to_send[target_cid][1] += 1
+                        
+                        if self.client_infos[target_cid].need_update:  
                             if cid not in data_dict_to_send:
                                 data_dict_to_send[cid] = [data_target_cid, 1]
                             else:
                                 data_dict_to_send[cid][0] += data_target_cid
                                 data_dict_to_send[cid][1] += 1
-                            pass
-                        pass
-                    pass
+
                 # send state data to clients
                 for target_cid in data_dict_to_send:
                     data_sent = pack('<i', data_dict_to_send[target_cid][1]) + data_dict_to_send[target_cid][0]
@@ -702,7 +705,7 @@ class TinkrGarageRoom(RoomServerBase):
 
     def add_client(self, cid):
         if cid not in self.client_infos:
-            new_client_state = self.ClientState()   # ROOM_SERVER_STRUCTS['client_state']()
+            new_client_state = self.ClientState()
             new_client_info = self.ClientInfo(new_client_state)
             self.client_infos[cid] = new_client_info
             garage_util.log_garage('client ' + str(cid) + ' entered room ' + str(self.room_id), True)
